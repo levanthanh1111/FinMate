@@ -58,8 +58,8 @@ public class ExpenseController {
     }
 
     @GetMapping("/category/{category}")
-    public List<Expense> getExpensesByCategory(@PathVariable String category) {
-        return expenseService.getExpensesByCategory(category);
+    public List<Expense> getExpensesByCategory(@PathVariable Long categoryId) {
+        return expenseService.getExpensesByCategory(categoryId);
     }
 
     @GetMapping("/date-range")

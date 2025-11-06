@@ -31,8 +31,8 @@ public class ExpenseService {
         expenseRepository.deleteById(id);
     }
     
-    public List<Expense> getExpensesByCategory(String category) {
-        return expenseRepository.findByCategory(category);
+    public List<Expense> getExpensesByCategory(Long categoryId) {
+        return expenseRepository.findByCategoryId(categoryId);
     }
     
     public List<Expense> getExpensesByDateRange(LocalDate startDate, LocalDate endDate) {
