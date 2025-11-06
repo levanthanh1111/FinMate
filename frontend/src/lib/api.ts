@@ -9,6 +9,9 @@ const api = axios.create({
   },
 });
 
+// Environment variables (would normally be in .env file)
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080/api';
+
 export const expenseApi = {
   // Get all expenses
   getAllExpenses: async () => {
@@ -67,6 +70,34 @@ export const expenseApi = {
   getSpendingTrends: async () => {
     const response = await api.get('/expenses/summary/trends');
     return response.data;
+  }
+};
+
+// Dashboard API
+export const dashboardApi = {
+  // Get dashboard data
+  getDashboardData: async () => {
+    try {
+      const response = await api.get('/dashboard');
+      return response.data;
+    } catch (error) {
+      console.error('Error fetching dashboard data:', error);
+      throw error;
+    }
+  }
+};
+
+// Exchange Rate API
+export const exchangeRateApi = {
+  // Get exchange rate
+  getExchangeRate: async (base = 'USD', target = 'VND') => {
+    try {
+      const response = await api.get(`/exchange-rate?base=${base}&target=${target}`);
+      return response.data;
+    } catch (error) {
+      console.error('Error fetching exchange rate:', error);
+      throw error;
+    }
   }
 };
 
