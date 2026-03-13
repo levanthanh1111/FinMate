@@ -2,20 +2,9 @@
 
 import { useState, useEffect } from 'react';
 import { useForm } from 'react-hook-form';
-
-const CATEGORIES = [
-  'Food & Dining',
-  'Transportation',
-  'Housing',
-  'Utilities',
-  'Entertainment',
-  'Shopping',
-  'Healthcare',
-  'Education',
-  'Personal Care',
-  'Travel',
-  'Other'
-];
+import { categoryApi } from '@/lib/api';
+import { useCurrency } from '@/lib/CurrencyContext';
+import { CURRENCY_SYMBOLS, convertCurrency } from '@/lib/currencyService';
 
 type ExpenseFormProps = {
   initialData?: any;
@@ -24,47 +13,107 @@ type ExpenseFormProps = {
 };
 
 export default function ExpenseForm({ initialData, onSubmit, isEditing = false }: ExpenseFormProps) {
+  const { currency } = useCurrency();
   const { register, handleSubmit, formState: { errors }, reset, setValue } = useForm();
-  const [selectedCategory, setSelectedCategory] = useState(initialData?.category || '');
+  const [categories, setCategories] = useState<{ id: number; name: string }[]>([]);
+  const [selectedCategoryId, setSelectedCategoryId] = useState<string>(initialData?.categoryId?.toString() || '');
   
-  // Set max date to today
-  const today = new Date().toISOString().split('T')[0];
-  
+  // Backend format: yyyy-MM-dd HH:mm:ss.SSSSSS
+  const formatDateForBackend = (d: Date): string => {
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    const h = String(d.getHours()).padStart(2, '0');
+    const min = String(d.getMinutes()).padStart(2, '0');
+    const s = String(d.getSeconds()).padStart(2, '0');
+    const ms = String(d.getMilliseconds() * 1000).padStart(6, '0').slice(0, 6);
+    return `${y}-${m}-${day} ${h}:${min}:${s}.${ms}`;
+  };
+
+  // datetime-local format: yyyy-MM-ddTHH:mm
+  const toDateTimeLocal = (d: Date): string => {
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    const h = String(d.getHours()).padStart(2, '0');
+    const min = String(d.getMinutes()).padStart(2, '0');
+    return `${y}-${m}-${day}T${h}:${min}`;
+  };
+
+  // Parse backend "yyyy-MM-dd HH:mm:ss.SSSSSS" to datetime-local "yyyy-MM-ddTHH:mm"
+  const backendToDateTimeLocal = (s: string): string =>
+    s ? s.replace(' ', 'T').slice(0, 16) : toDateTimeLocal(new Date());
+
+  // Convert datetime-local "yyyy-MM-ddTHH:mm" to backend format
+  const dateTimeLocalToBackend = (s: string): string =>
+    s ? s.replace('T', ' ') + ':00.000000' : formatDateForBackend(new Date());
+
+  const getDefaultDateTimeLocal = () => toDateTimeLocal(new Date());
+
+  useEffect(() => {
+    const fetchCategories = async () => {
+      try {
+        const data = await categoryApi.getAllCategories();
+        setCategories(data);
+      } catch (error) {
+        console.error('Error fetching categories:', error);
+      }
+    };
+    fetchCategories();
+  }, []);
+
   useEffect(() => {
     if (initialData) {
-      // Format date to YYYY-MM-DD for the date input
-      const formattedDate = initialData.date 
-        ? new Date(initialData.date).toISOString().split('T')[0]
-        : today;
-        
-      setValue('amount', initialData.amount);
-      setValue('category', initialData.category);
+      const backendDate = initialData.date
+        ? (typeof initialData.date === 'string'
+            ? initialData.date
+            : formatDateForBackend(new Date(initialData.date)))
+        : null;
+      const dateTimeLocalValue = backendDate
+        ? backendToDateTimeLocal(backendDate)
+        : getDefaultDateTimeLocal();
+
+      // Convert backend amount (VND) to selected display currency for input
+      convertCurrency(parseFloat(initialData.amount) || 0, 'VND', currency).then((amt) => {
+        setValue('amount', Math.round(amt * 100) / 100);
+      });
+      setValue('categoryId', initialData.categoryId);
       setValue('note', initialData.note);
-      setValue('date', formattedDate);
-      setSelectedCategory(initialData.category);
+      setValue('date', dateTimeLocalValue);
+      setSelectedCategoryId(initialData.categoryId?.toString() || '');
     }
-  }, [initialData, setValue, today]);
+  }, [initialData, setValue, currency]);
   
-  const handleFormSubmit = (data: any) => {
+  const handleFormSubmit = async (data: any) => {
+    const dateValue = data.date
+      ? dateTimeLocalToBackend(data.date)
+      : formatDateForBackend(new Date());
+
+    // Convert from selected currency to VND for backend storage
+    const amountInDisplayCurrency = parseFloat(data.amount);
+    const amountInVnd = await convertCurrency(amountInDisplayCurrency, currency, 'VND');
+
     onSubmit({
-      ...data,
-      amount: parseFloat(data.amount)
+      amount: Math.round(amountInVnd),
+      categoryId: parseInt(data.categoryId, 10),
+      note: data.note,
+      date: dateValue
     });
     
     if (!isEditing) {
       reset();
-      setSelectedCategory('');
+      setSelectedCategoryId('');
     }
   };
   
   return (
     <form onSubmit={handleSubmit(handleFormSubmit)} className="space-y-4">
       <div>
-        <label htmlFor="amount" className="form-label">Amount ($)</label>
+        <label htmlFor="amount" className="form-label">Amount ({CURRENCY_SYMBOLS[currency]} {currency})</label>
         <input
           id="amount"
           type="number"
-          step="0.01"
+          step={['VND', 'JPY', 'KRW'].includes(currency) ? '1' : '0.01'}
           className="form-input"
           placeholder="0.00"
           {...register('amount', { 
@@ -79,33 +128,34 @@ export default function ExpenseForm({ initialData, onSubmit, isEditing = false }
       </div>
       
       <div>
-        <label htmlFor="category" className="form-label">Category</label>
+        <label htmlFor="categoryId" className="form-label">Category</label>
         <select
-          id="category"
+          id="categoryId"
           className="form-input"
-          {...register('category', { required: 'Category is required' })}
-          onChange={(e) => setSelectedCategory(e.target.value)}
-          value={selectedCategory}
+          {...register('categoryId', { required: 'Category is required' })}
+          onChange={(e) => setSelectedCategoryId(e.target.value)}
+          value={selectedCategoryId}
         >
           <option value="">Select a category</option>
-          {CATEGORIES.map((category) => (
-            <option key={category} value={category}>
-              {category}
+          {categories.map((cat) => (
+            <option key={cat.id} value={cat.id}>
+              {cat.name}
             </option>
           ))}
         </select>
-        {errors.category && (
-          <p className="text-red-500 text-sm mt-1">{errors.category.message as string}</p>
+        {errors.categoryId && (
+          <p className="text-red-500 text-sm mt-1">{errors.categoryId.message as string}</p>
         )}
       </div>
       
       <div>
-        <label htmlFor="date" className="form-label">Date</label>
+        <label htmlFor="date" className="form-label">Date & Time</label>
         <input
           id="date"
-          type="date"
+          type="datetime-local"
           className="form-input"
-          max={today}
+          max={getDefaultDateTimeLocal()}
+          defaultValue={!initialData ? getDefaultDateTimeLocal() : undefined}
           {...register('date', { required: 'Date is required' })}
         />
         {errors.date && (

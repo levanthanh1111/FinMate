@@ -1,14 +1,13 @@
 package com.finmate.api.service;
 
+import com.finmate.api.model.Category;
 import com.finmate.api.model.Expense;
+import com.finmate.api.repository.CategoryRepository;
 import com.finmate.api.repository.ExpenseRepository;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
 import java.math.BigDecimal;
-import java.time.LocalDate;
 import java.time.LocalDateTime;
-import java.time.Month;
 import java.util.*;
 import java.util.stream.Collectors;
 
@@ -16,20 +15,16 @@ import java.util.stream.Collectors;
 public class DashboardService {
 
     private final ExpenseRepository expenseRepository;
-    private final Map<Long, String> categoryMap = Map.of(
-        1L, "Food & Dining",
-        2L, "Transportation",
-        3L, "Housing",
-        4L, "Entertainment",
-        5L, "Shopping",
-        6L, "Utilities",
-        7L, "Healthcare",
-        8L, "Travel"
-    );
+    private final CategoryRepository categoryRepository;
 
-    @Autowired
-    public DashboardService(ExpenseRepository expenseRepository) {
+    public DashboardService(ExpenseRepository expenseRepository, CategoryRepository categoryRepository) {
         this.expenseRepository = expenseRepository;
+        this.categoryRepository = categoryRepository;
+    }
+
+    private Map<Long, String> getCategoryMap() {
+        return categoryRepository.findAll().stream()
+                .collect(Collectors.toMap(Category::getId, Category::getName));
     }
 
     /**
@@ -154,6 +149,7 @@ public class DashboardService {
      */
     private Map<String, Object> getCategoryTotals(List<Expense> expenses) {
         Map<String, Object> result = new HashMap<>();
+        Map<Long, String> categoryMap = getCategoryMap();
         
         // Group expenses by category and sum amounts
         Map<Long, BigDecimal> categoryAmounts = expenses.stream()
@@ -195,6 +191,7 @@ public class DashboardService {
             .collect(Collectors.toList());
         
         // Convert to response format
+        Map<Long, String> categoryMap = getCategoryMap();
         return sortedExpenses.stream().map(expense -> {
             Map<String, Object> expenseMap = new HashMap<>();
             expenseMap.put("id", expense.getId());

@@ -8,8 +8,8 @@ export default function CurrencySelector() {
   const { currency, setCurrency } = useCurrency();
   const [isOpen, setIsOpen] = useState(false);
 
-  // Available currencies
-  const availableCurrencies: CurrencyCode[] = ['VND', 'USD', 'EUR', 'JPY'];
+  // Available currencies (VND default first)
+  const availableCurrencies: CurrencyCode[] = ['VND', 'USD', 'EUR', 'JPY', 'KRW', 'HKD', 'CNY'];
 
   const handleCurrencyChange = (newCurrency: CurrencyCode) => {
     setCurrency(newCurrency);
@@ -20,34 +20,36 @@ export default function CurrencySelector() {
     <div className="relative">
       <button
         onClick={() => setIsOpen(!isOpen)}
-        className="flex items-center space-x-2 bg-white border border-gray-300 rounded-md px-3 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 shadow-sm"
+        className="flex items-center gap-2 px-3 py-2 rounded-lg border border-slate-200 bg-white text-sm font-medium text-slate-700 hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-sky-500/30 focus:border-sky-500 transition-colors"
         aria-haspopup="true"
         aria-expanded={isOpen}
       >
         <span>{CURRENCY_SYMBOLS[currency]} {currency}</span>
-        <span className="ml-1">▼</span>
+        <svg className={`w-4 h-4 text-slate-400 transition-transform ${isOpen ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+        </svg>
       </button>
 
       {isOpen && (
-        <div className="absolute right-0 mt-1 w-40 rounded-md shadow-lg bg-white ring-1 ring-black ring-opacity-5 z-10 border border-gray-100">
-          <div
-            className="py-1"
-            role="menu"
-            aria-orientation="vertical"
-            aria-labelledby="currency-menu"
-          >
+        <>
+          <div className="fixed inset-0 z-10" onClick={() => setIsOpen(false)} aria-hidden />
+          <div className="absolute right-0 mt-1.5 w-44 rounded-xl shadow-lg bg-white border border-slate-200 py-1 z-20">
             {availableCurrencies.map((currencyOption) => (
               <button
                 key={currencyOption}
                 onClick={() => handleCurrencyChange(currencyOption)}
-                className={`block w-full text-left px-4 py-2 text-sm ${currency === currencyOption ? 'bg-blue-50 text-blue-700 font-medium' : 'text-gray-700 hover:bg-gray-50'}`}
+                className={`block w-full text-left px-4 py-2.5 text-sm transition-colors ${
+                  currency === currencyOption
+                    ? 'bg-sky-50 text-sky-700 font-medium'
+                    : 'text-slate-600 hover:bg-slate-50'
+                }`}
                 role="menuitem"
               >
                 {CURRENCY_SYMBOLS[currencyOption]} {currencyOption}
               </button>
             ))}
           </div>
-        </div>
+        </>
       )}
     </div>
   );

@@ -12,6 +12,32 @@ const api = axios.create({
 // Environment variables (would normally be in .env file)
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080/api';
 
+export const categoryApi = {
+  getAllCategories: async () => {
+    const response = await api.get('/categories');
+    return response.data;
+  },
+
+  getCategoryById: async (id: number) => {
+    const response = await api.get(`/categories/${id}`);
+    return response.data;
+  },
+
+  createCategory: async (category: { name: string; description?: string }) => {
+    const response = await api.post('/categories', category);
+    return response.data;
+  },
+
+  updateCategory: async (id: number, category: { name: string; description?: string }) => {
+    const response = await api.put(`/categories/${id}`, category);
+    return response.data;
+  },
+
+  deleteCategory: async (id: number) => {
+    await api.delete(`/categories/${id}`);
+  }
+};
+
 export const expenseApi = {
   // Get all expenses
   getAllExpenses: async () => {
@@ -43,8 +69,8 @@ export const expenseApi = {
   },
 
   // Get expenses by category
-  getExpensesByCategory: async (category: string) => {
-    const response = await api.get(`/expenses/category/${category}`);
+  getExpensesByCategory: async (categoryId: number) => {
+    const response = await api.get(`/expenses/category/${categoryId}`);
     return response.data;
   },
 
@@ -89,7 +115,6 @@ export const dashboardApi = {
 
 // Exchange Rate API
 export const exchangeRateApi = {
-  // Get exchange rate
   getExchangeRate: async (base = 'USD', target = 'VND') => {
     try {
       const response = await api.get(`/exchange-rate?base=${base}&target=${target}`);
@@ -98,6 +123,24 @@ export const exchangeRateApi = {
       console.error('Error fetching exchange rate:', error);
       throw error;
     }
+  },
+  // Get latest rates (from local DB, or fetch if empty)
+  getLatestRates: async (fetchFromApi = false) => {
+    const response = await api.get(`/exchange-rate/latest?fetch=${fetchFromApi}`);
+    return response.data;
+  },
+  // Force fetch from external API and save to local
+  fetchAndSaveRates: async () => {
+    const response = await api.post('/exchange-rate/fetch');
+    return response.data;
+  },
+  // Get rates from local DB only
+  getRatesFromLocal: async (base?: string, date?: string) => {
+    const params = new URLSearchParams();
+    if (base) params.append('base', base);
+    if (date) params.append('date', date);
+    const response = await api.get(`/exchange-rate/local?${params}`);
+    return response.data;
   }
 };
 

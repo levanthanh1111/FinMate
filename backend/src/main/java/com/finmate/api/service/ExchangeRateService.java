@@ -1,77 +1,135 @@
 package com.finmate.api.service;
 
+import com.finmate.api.model.ExchangeRate;
+import com.finmate.api.model.ExchangeRateEntry;
+import com.finmate.api.repository.ExchangeRateRepository;
+import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestTemplate;
-import org.springframework.cache.annotation.Cacheable;
-import org.springframework.beans.factory.annotation.Value;
 
-import java.util.Map;
+import java.math.BigDecimal;
+import java.time.LocalDate;
+import java.time.format.DateTimeFormatter;
 import java.util.HashMap;
+import java.util.Map;
+import java.util.Optional;
 
 @Service
+@RequiredArgsConstructor
 public class ExchangeRateService {
 
-    private final RestTemplate restTemplate;
-    private final String apiUrl = "https://api.exchangerate.host/latest";
-    
-    // Default exchange rates in case API fails
-    private final Map<String, Double> DEFAULT_RATES = Map.of(
-        "VND", 24000.0, // Approximate VND to USD rate
-        "USD", 1.0
-    );
+    @Value("${exchange-rate.api-url:https://api.exchangeratesapi.io/v1/latest}")
+    private String apiUrl;
+    @Value("${exchange-rate.access-key}")
+    private String accessKey;
+    @Value("${exchange-rate.symbols:USD,VND,JPY,KRW,HKD,CNY}")
+    private String symbols;
 
-    public ExchangeRateService() {
-        this.restTemplate = new RestTemplate();
-    }
+    private final RestTemplate restTemplate = new RestTemplate();
+    private final ExchangeRateRepository exchangeRateRepository;
 
     /**
-     * Get exchange rate from base currency to target currency
-     * Cached for 1 hour to reduce API calls
+     * Fetch latest rates from external API, save to local DB, and return response.
      */
-    @Cacheable(value = "exchangeRates", key = "#base + '-' + #target", cacheManager = "cacheManager")
-    public Double getExchangeRate(String base, String target) {
-        try {
-            String url = apiUrl + "?base=" + base + "&symbols=" + target;
-            Map<String, Object> response = restTemplate.getForObject(url, Map.class);
-            
-            if (response != null && response.containsKey("rates")) {
-                Map<String, Double> rates = (Map<String, Double>) response.get("rates");
-                if (rates.containsKey(target)) {
-                    return rates.get(target);
-                }
-            }
-            
-            // If API call fails or doesn't return expected format, use default rates
-            return getDefaultRate(base, target);
-        } catch (Exception e) {
-            return getDefaultRate(base, target);
+    @SuppressWarnings("unchecked")
+    public Map<String, Object> fetchAndSaveRates() {
+        String url = apiUrl + "?access_key=" + accessKey + "&symbols=" + symbols + "&format=1";
+        Map<String, Object> response = restTemplate.getForObject(url, Map.class);
+
+        if (response == null || !Boolean.TRUE.equals(response.get("success"))) {
+            throw new RuntimeException("Failed to fetch exchange rates from external API");
         }
+
+        ExchangeRate exchangeRate = new ExchangeRate();
+        exchangeRate.setBase((String) response.get("base"));
+        exchangeRate.setTimestamp(((Number) response.get("timestamp")).longValue());
+        if (response.get("date") != null) {
+            exchangeRate.setDate(LocalDate.parse((String) response.get("date"), DateTimeFormatter.ISO_LOCAL_DATE));
+        } else {
+            exchangeRate.setDate(LocalDate.now());
+        }
+
+        Map<String, Object> ratesMap = (Map<String, Object>) response.get("rates");
+        if (ratesMap != null) {
+            for (Map.Entry<String, Object> entry : ratesMap.entrySet()) {
+                ExchangeRateEntry rateEntry = new ExchangeRateEntry();
+                rateEntry.setExchangeRate(exchangeRate);
+                rateEntry.setCurrency(entry.getKey());
+                rateEntry.setRate(BigDecimal.valueOf(((Number) entry.getValue()).doubleValue()));
+                exchangeRate.getEntries().add(rateEntry);
+            }
+        }
+
+        exchangeRateRepository.save(exchangeRate);
+        return response;
     }
-    
+
     /**
-     * Get default exchange rate when API fails
+     * Get latest rates from local DB. Returns same format as external API.
      */
-    private Double getDefaultRate(String base, String target) {
+    public Optional<Map<String, Object>> getLatestRatesFromLocal(String base) {
+        return exchangeRateRepository.findFirstByBaseOrderByCreatedAtDesc(base == null ? "EUR" : base)
+                .map(this::toResponseMap);
+    }
+
+    /**
+     * Get rates from local DB for a specific date.
+     */
+    public Optional<Map<String, Object>> getRatesFromLocalByDate(String base, LocalDate date) {
+        return exchangeRateRepository.findFirstByBaseAndDateOrderByCreatedAtDesc(base == null ? "EUR" : base, date)
+                .map(this::toResponseMap);
+    }
+
+    /**
+     * Get rates: try local first, else fetch from API and save.
+     */
+    public Map<String, Object> getRates(boolean fetchFromApi) {
+        if (fetchFromApi) {
+            return fetchAndSaveRates();
+        }
+        return getLatestRatesFromLocal("EUR")
+                .orElseGet(this::fetchAndSaveRates);
+    }
+
+    private Map<String, Object> toResponseMap(ExchangeRate er) {
+        Map<String, Object> result = new HashMap<>();
+        result.put("success", true);
+        result.put("timestamp", er.getTimestamp());
+        result.put("base", er.getBase());
+        result.put("date", er.getDate().toString());
+        Map<String, Double> rates = new HashMap<>();
+        for (ExchangeRateEntry entry : er.getEntries()) {
+            rates.put(entry.getCurrency(), entry.getRate().doubleValue());
+        }
+        result.put("rates", rates);
+        return result;
+    }
+
+    /**
+     * Get single exchange rate (base to target). Uses local DB (EUR-based) first, falls back to API.
+     * Converts: rate(base->target) = rate(EUR->target) / rate(EUR->base)
+     */
+    public Double getExchangeRate(String base, String target) {
         if (base.equals(target)) {
             return 1.0;
         }
-        
-        if (base.equals("USD") && DEFAULT_RATES.containsKey(target)) {
-            return DEFAULT_RATES.get(target);
+        Optional<Map<String, Object>> local = getLatestRatesFromLocal("EUR");
+        if (local.isEmpty()) {
+            fetchAndSaveRates();
+            local = getLatestRatesFromLocal("EUR");
         }
-        
-        if (target.equals("USD") && DEFAULT_RATES.containsKey(base)) {
-            return 1.0 / DEFAULT_RATES.get(base);
+        if (local.isPresent()) {
+            @SuppressWarnings("unchecked")
+            Map<String, Double> rates = (Map<String, Double>) local.get().get("rates");
+            if (rates != null) {
+                Double baseRate = base.equals("EUR") ? 1.0 : rates.get(base);
+                Double targetRate = target.equals("EUR") ? 1.0 : rates.get(target);
+                if (baseRate != null && baseRate != 0 && targetRate != null) {
+                    return targetRate / baseRate;
+                }
+            }
         }
-        
-        // Convert via USD
-        if (DEFAULT_RATES.containsKey(base) && DEFAULT_RATES.containsKey(target)) {
-            double baseToUsd = 1.0 / DEFAULT_RATES.get(base);
-            double usdToTarget = DEFAULT_RATES.get(target);
-            return baseToUsd * usdToTarget;
-        }
-        
-        // Default fallback
         return 1.0;
     }
 }

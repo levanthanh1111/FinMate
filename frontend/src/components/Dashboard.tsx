@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { expenseApi, dashboardApi } from '@/lib/api';
+import {expenseApi, dashboardApi, categoryApi} from '@/lib/api';
 import { Chart as ChartJS, ArcElement, Tooltip, Legend, CategoryScale, LinearScale, BarElement, Title } from 'chart.js';
 import { Pie, Bar } from 'react-chartjs-2';
 import Link from 'next/link';
@@ -14,6 +14,7 @@ ChartJS.register(ArcElement, Tooltip, Legend, CategoryScale, LinearScale, BarEle
 export default function Dashboard() {
   const [loading, setLoading] = useState(true);
   const [recentExpenses, setRecentExpenses] = useState<any[]>([]);
+  const [categories, setCategories] = useState<{ id: number; name: string }[]>([]);
   const [monthlySummary, setMonthlySummary] = useState<any>({
     categories: [],
     amounts: [],
@@ -151,11 +152,11 @@ export default function Dashboard() {
         // Convert monthly summary amounts
         const convertedAmounts = await Promise.all(
           monthlySummary.amounts.map((amount: number) => 
-            convertCurrency(amount, 'USD', currency)
+            convertCurrency(amount, 'VND', currency)
           )
         );
         
-        const convertedTotal = await convertCurrency(monthlySummary.total, 'USD', currency);
+        const convertedTotal = await convertCurrency(monthlySummary.total, 'VND', currency);
         
         setConvertedMonthlySummary({
           categories: monthlySummary.categories,
@@ -166,7 +167,7 @@ export default function Dashboard() {
         // Convert category totals
         const convertedCategoryAmounts = await Promise.all(
           categoryTotals.amounts.map((amount: number) => 
-            convertCurrency(amount, 'USD', currency)
+            convertCurrency(amount, 'VND', currency)
           )
         );
         
@@ -180,7 +181,7 @@ export default function Dashboard() {
           recentExpenses.map(async (expense) => {
             const convertedAmount = await convertCurrency(
               parseFloat(expense.amount),
-              'USD',
+              'VND',
               currency
             );
             return { ...expense, convertedAmount };
@@ -197,6 +198,18 @@ export default function Dashboard() {
     
     convertAmounts();
   }, [currency, monthlySummary, categoryTotals, recentExpenses, loading, currencyLoading]);
+
+  useEffect(() => {
+    const fetchCategories = async () => {
+      try {
+        const data = await categoryApi.getAllCategories();
+        setCategories(data);
+      } catch (error) {
+        console.error('Error fetching categories:', error);
+      }
+    };
+    fetchCategories();
+  }, []);
 
   const pieChartData = {
     labels: monthlySummary.categories,
@@ -241,6 +254,9 @@ export default function Dashboard() {
     return formatCurrency(amount, currency);
   };
 
+  const getCategoryName = (categoryId: number) =>
+  categories.find(c => c.id === categoryId)?.name ?? `Category ${categoryId}`;
+
   // Use dashboardApi instead of direct API calls when available
   useEffect(() => {
     const fetchDashboardData = async () => {
@@ -264,28 +280,51 @@ export default function Dashboard() {
   }, []);
 
   if (loading || currencyLoading) {
-    return <div className="text-center py-10">Loading dashboard data...</div>;
+    return (
+      <div className="space-y-6 max-w-7xl mx-auto">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <div className="card-static h-80">
+            <div className="skeleton h-6 w-1/3 mb-4" />
+            <div className="skeleton h-12 w-full mb-6" />
+            <div className="skeleton h-48 w-full rounded-lg" />
+          </div>
+          <div className="card-static h-80">
+            <div className="skeleton h-6 w-1/3 mb-4" />
+            <div className="skeleton h-48 w-full rounded-lg" />
+          </div>
+        </div>
+        <div className="card-static h-64">
+          <div className="skeleton h-6 w-1/4 mb-4" />
+          <div className="skeleton h-40 w-full rounded-lg" />
+        </div>
+      </div>
+    );
   }
   
   if (isConverting) {
-    return <div className="text-center py-10">Converting currency...</div>;
+    return (
+      <div className="flex flex-col items-center justify-center py-20">
+        <div className="w-12 h-12 border-4 border-sky-200 border-t-sky-600 rounded-full animate-spin mb-4" />
+        <p className="text-slate-500">Converting currency...</p>
+      </div>
+    );
   }
   
   return (
     <div className="space-y-6 max-w-7xl mx-auto">
       {isMockData && (
-        <div className="bg-yellow-50 border-l-4 border-yellow-400 p-4 mb-6 rounded-md">
-          <p className="text-sm text-yellow-700">
+        <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 mb-6">
+          <p className="text-sm text-amber-800">
             <strong>Note:</strong> Displaying mock data as the API is unavailable.
           </p>
         </div>
       )}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        <div className="card mb-6 border-l-4 border-l-blue-500 shadow-md">
-          <h2 className="text-xl font-bold mb-4 text-gray-800">Monthly Overview</h2>
-          <div className="mb-6 bg-gray-50 p-4 rounded-lg">
+        <div className="card-static border-l-4 border-l-sky-500">
+          <h2 className="text-lg font-semibold mb-4 text-slate-900">Monthly Overview</h2>
+          <div className="mb-6 bg-slate-50 p-4 rounded-xl">
             <p className="stat-label">Total Spending</p>
-            <p className="stat-value text-red-600">
+            <p className="stat-value text-rose-600">
               {formatAmount(convertedMonthlySummary.total || monthlySummary.total)}
             </p>
           </div>
@@ -315,14 +354,14 @@ export default function Dashboard() {
               }} />
             </div>
           ) : (
-            <div className="text-center py-8 bg-gray-50 rounded-lg">
-              <p className="text-gray-500">No data available for this month</p>
+            <div className="text-center py-8 bg-slate-50 rounded-xl">
+              <p className="text-slate-500">No data available for this month</p>
             </div>
           )}
         </div>
         
-        <div className="card border-l-4 border-l-purple-500 shadow-md">
-          <h2 className="text-xl font-bold mb-4 text-gray-800">Top Categories</h2>
+        <div className="card-static border-l-4 border-l-violet-500">
+          <h2 className="text-lg font-semibold mb-4 text-slate-900">Top Categories</h2>
           {categoryTotals.categories.length > 0 ? (
             <div className="h-64">
               <Bar 
@@ -353,19 +392,19 @@ export default function Dashboard() {
               />
             </div>
           ) : (
-            <div className="text-center py-8 bg-gray-50 rounded-lg">
-              <p className="text-gray-500">No category data available</p>
+            <div className="text-center py-8 bg-slate-50 rounded-xl">
+              <p className="text-slate-500">No category data available</p>
             </div>
           )}
         </div>
       </div>
       
-      <div className="card mb-6 border-l-4 border-l-red-500 shadow-md">
+      <div className="card-static border-l-4 border-l-rose-500">
         <div className="flex justify-between items-center mb-4">
-          <h2 className="text-xl font-bold text-gray-800">
+          <h2 className="text-lg font-semibold text-slate-900">
             Recent Expenses
           </h2>
-          <Link href="/expenses" className="px-3 py-1.5 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-md text-sm font-medium transition-colors">
+          <Link href="/expenses" className="btn btn-ghost py-1.5 px-3 text-sm">
             View All
           </Link>
         </div>
@@ -388,7 +427,7 @@ export default function Dashboard() {
                       {formatDate(expense.date)}
                     </td>
                     <td className="table-cell font-medium">
-                      {expense.category}
+                      {getCategoryName(expense.categoryId)}
                     </td>
                     <td className="table-cell max-w-xs truncate">
                       {expense.note || '-'}
@@ -404,31 +443,29 @@ export default function Dashboard() {
             </table>
           </div>
         ) : (
-          <div className="text-center py-8 bg-gray-50 rounded-lg">
-            <p className="text-gray-500">No recent expenses</p>
+          <div className="text-center py-8 bg-slate-50 rounded-xl">
+            <p className="text-slate-500">No recent expenses</p>
           </div>
         )}
       </div>
       
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <Link href="/expenses/add" className="card border-t-4 border-t-blue-500 shadow-md hover:shadow-lg">
+        <Link href="/expenses/add" className="card border-t-4 border-t-sky-500 group">
           <div>
-            <h3 className="font-bold text-blue-700 mb-2">Add Expense</h3>
-            <p className="text-sm text-gray-600">Record a new transaction</p>
+            <h3 className="font-semibold text-slate-900 mb-1 group-hover:text-sky-600 transition-colors">Add Expense</h3>
+            <p className="text-sm text-slate-500">Record a new transaction</p>
           </div>
         </Link>
-
-        <Link href="/reports" className="card border-t-4 border-t-purple-500 shadow-md hover:shadow-lg">
+        <Link href="/reports" className="card border-t-4 border-t-violet-500 group">
           <div>
-            <h3 className="font-bold text-purple-700 mb-2">View Reports</h3>
-            <p className="text-sm text-gray-600">Analyze your spending</p>
+            <h3 className="font-semibold text-slate-900 mb-1 group-hover:text-violet-600 transition-colors">View Reports</h3>
+            <p className="text-sm text-slate-500">Analyze your spending</p>
           </div>
         </Link>
-
-        <Link href="/expenses" className="card border-t-4 border-t-green-500 shadow-md hover:shadow-lg">
+        <Link href="/expenses" className="card border-t-4 border-t-emerald-500 group">
           <div>
-            <h3 className="font-bold text-green-700 mb-2">Manage Expenses</h3>
-            <p className="text-sm text-gray-600">View and edit transactions</p>
+            <h3 className="font-semibold text-slate-900 mb-1 group-hover:text-emerald-600 transition-colors">Manage Expenses</h3>
+            <p className="text-sm text-slate-500">View and edit transactions</p>
           </div>
         </Link>
       </div>

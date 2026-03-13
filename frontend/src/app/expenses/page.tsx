@@ -2,34 +2,69 @@
 
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
-import { expenseApi } from '@/lib/api';
+import { expenseApi, categoryApi } from '@/lib/api';
+import { useCurrency } from '@/lib/CurrencyContext';
+import { convertCurrency, formatCurrency } from '@/lib/currencyService';
 
 export default function ExpensesPage() {
-  const [expenses, setExpenses] = useState([]);
+  const { currency } = useCurrency();
+  const [expenses, setExpenses] = useState<any[]>([]);
+  const [categories, setCategories] = useState<{ id: number; name: string }[]>([]);
   const [loading, setLoading] = useState(true);
+  const [convertedAmounts, setConvertedAmounts] = useState<Record<number, number>>({});
+  const [convertedTotal, setConvertedTotal] = useState<number>(0);
   const [filter, setFilter] = useState({
-    category: '',
+    categoryId: '',
     startDate: '',
     endDate: ''
   });
 
   useEffect(() => {
+    const fetchCategories = async () => {
+      try {
+        const data = await categoryApi.getAllCategories();
+        setCategories(data);
+      } catch (error) {
+        console.error('Error fetching categories:', error);
+      }
+    };
+    fetchCategories();
+  }, []);
+
+  useEffect(() => {
     fetchExpenses();
   }, []);
+
+  useEffect(() => {
+    const convertAmounts = async () => {
+      const amounts: Record<number, number> = {};
+      let total = 0;
+      for (const exp of expenses) {
+        const amt = parseFloat(exp.amount) || 0;
+        const converted = await convertCurrency(amt, 'VND', currency);
+        amounts[exp.id] = converted;
+        total += converted;
+      }
+      setConvertedAmounts(amounts);
+      setConvertedTotal(total);
+    };
+    if (expenses.length > 0) convertAmounts();
+    else setConvertedTotal(0);
+  }, [expenses, currency]);
 
   const fetchExpenses = async () => {
     try {
       setLoading(true);
       let data;
       
-      if (filter.category) {
-        data = await expenseApi.getExpensesByCategory(filter.category);
+      if (filter.categoryId) {
+        data = await expenseApi.getExpensesByCategory(parseInt(filter.categoryId, 10));
       } else if (filter.startDate && filter.endDate) {
         data = await expenseApi.getExpensesByDateRange(filter.startDate, filter.endDate);
       } else {
         data = await expenseApi.getAllExpenses();
       }
-      
+      console.log("Fetched expenses:", data);
       setExpenses(data);
     } catch (error) {
       console.error('Error fetching expenses:', error);
@@ -50,12 +85,15 @@ export default function ExpensesPage() {
 
   const resetFilters = () => {
     setFilter({
-      category: '',
+      categoryId: '',
       startDate: '',
       endDate: ''
     });
     fetchExpenses();
   };
+
+  const getCategoryName = (categoryId: number) =>
+    categories.find(c => c.id === categoryId)?.name ?? `Category ${categoryId}`;
 
   const handleDeleteExpense = async (id: number) => {
     if (confirm('Are you sure you want to delete this expense?')) {
@@ -68,46 +106,41 @@ export default function ExpensesPage() {
     }
   };
 
-  // Calculate total amount for displayed expenses
-  const totalAmount = expenses.reduce(
-    (sum: number, expense: any) => sum + parseFloat(expense.amount),
-    0
-  );
 
   return (
-    <div className="space-y-6">
-      <div className="flex justify-between items-center">
-        <h1 className="text-3xl font-bold">Expenses</h1>
-        <Link href="/expenses/add" className="btn btn-primary">
-          Add New Expense
+    <div className="space-y-6 max-w-6xl mx-auto">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+        <div>
+          <h1 className="text-2xl md:text-3xl font-bold text-slate-900 tracking-tight">Expenses</h1>
+          <p className="text-slate-500 mt-1">View and manage your transactions</p>
+        </div>
+        <Link href="/expenses/add" className="btn btn-primary shrink-0">
+          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+          </svg>
+          Add Expense
         </Link>
       </div>
 
       {/* Filter Form */}
-      <div className="card">
-        <h2 className="text-xl font-semibold mb-4">Filter Expenses</h2>
+      <div className="card-static">
+        <h2 className="text-lg font-semibold text-slate-900 mb-4">Filter</h2>
         <form onSubmit={applyFilters} className="grid grid-cols-1 md:grid-cols-4 gap-4">
           <div>
-            <label htmlFor="category" className="form-label">Category</label>
+            <label htmlFor="categoryId" className="form-label">Category</label>
             <select
-              id="category"
-              name="category"
+              id="categoryId"
+              name="categoryId"
               className="form-input"
-              value={filter.category}
+              value={filter.categoryId}
               onChange={handleFilterChange}
             >
               <option value="">All Categories</option>
-              <option value="Food & Dining">Food & Dining</option>
-              <option value="Transportation">Transportation</option>
-              <option value="Housing">Housing</option>
-              <option value="Utilities">Utilities</option>
-              <option value="Entertainment">Entertainment</option>
-              <option value="Shopping">Shopping</option>
-              <option value="Healthcare">Healthcare</option>
-              <option value="Education">Education</option>
-              <option value="Personal Care">Personal Care</option>
-              <option value="Travel">Travel</option>
-              <option value="Other">Other</option>
+              {categories.map((cat) => (
+                <option key={cat.id} value={cat.id}>
+                  {cat.name}
+                </option>
+              ))}
             </select>
           </div>
           
@@ -143,41 +176,52 @@ export default function ExpensesPage() {
       </div>
 
       {/* Expenses List */}
-      <div className="card">
-        <div className="flex justify-between items-center mb-4">
-          <h2 className="text-xl font-semibold">Expense List</h2>
-          <p className="font-semibold">Total: ${totalAmount.toFixed(2)}</p>
+      <div className="card-static">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
+          <h2 className="text-lg font-semibold text-slate-900">Expense List</h2>
+          <div className="text-right">
+            <span className="text-sm text-slate-500">Total </span>
+            <span className="text-lg font-bold text-slate-900">{formatCurrency(convertedTotal, currency)}</span>
+          </div>
         </div>
         
         {loading ? (
-          <div className="text-center py-10">Loading...</div>
+          <div className="space-y-3 py-8">
+            {[1, 2, 3, 4, 5].map((i) => (
+              <div key={i} className="flex gap-4">
+                <div className="skeleton h-10 flex-1" />
+                <div className="skeleton h-10 w-24" />
+                <div className="skeleton h-10 w-20" />
+              </div>
+            ))}
+          </div>
         ) : expenses.length > 0 ? (
-          <div className="overflow-x-auto">
-            <table className="w-full">
-              <thead className="bg-gray-50">
+          <div className="table-container">
+            <table className="table-default">
+              <thead className="table-header">
                 <tr>
-                  <th className="px-4 py-2 text-left">Date</th>
-                  <th className="px-4 py-2 text-left">Category</th>
-                  <th className="px-4 py-2 text-left">Amount</th>
-                  <th className="px-4 py-2 text-left">Note</th>
-                  <th className="px-4 py-2 text-left">Actions</th>
+                  <th className="table-header-cell">Date</th>
+                  <th className="table-header-cell">Category</th>
+                  <th className="table-header-cell">Amount</th>
+                  <th className="table-header-cell">Note</th>
+                  <th className="table-header-cell text-right">Actions</th>
                 </tr>
               </thead>
-              <tbody>
+              <tbody className="table-body">
                 {expenses.map((expense: any) => (
-                  <tr key={expense.id} className="border-t">
-                    <td className="px-4 py-2">{new Date(expense.date).toLocaleDateString()}</td>
-                    <td className="px-4 py-2">{expense.category}</td>
-                    <td className="px-4 py-2">${parseFloat(expense.amount).toFixed(2)}</td>
-                    <td className="px-4 py-2">{expense.note}</td>
-                    <td className="px-4 py-2">
-                      <div className="flex space-x-2">
-                        <Link href={`/expenses/edit/${expense.id}`} className="text-blue-600 hover:underline">
+                  <tr key={expense.id} className="table-row">
+                    <td className="table-cell">{new Date(expense.date).toLocaleDateString()}</td>
+                    <td className="table-cell font-medium text-slate-800">{getCategoryName(expense.categoryId)}</td>
+                    <td className="table-cell font-semibold text-slate-900">{formatCurrency(convertedAmounts[expense.id] ?? parseFloat(expense.amount), currency)}</td>
+                    <td className="table-cell max-w-xs truncate text-slate-500">{expense.note || '—'}</td>
+                    <td className="table-cell text-right">
+                      <div className="flex justify-end gap-2">
+                        <Link href={`/expenses/edit/${expense.id}`} className="btn btn-ghost py-1.5 px-2 text-sm">
                           Edit
                         </Link>
                         <button
                           onClick={() => handleDeleteExpense(expense.id)}
-                          className="text-red-600 hover:underline"
+                          className="btn btn-ghost py-1.5 px-2 text-sm text-red-600 hover:text-red-700 hover:bg-red-50"
                         >
                           Delete
                         </button>
@@ -189,7 +233,18 @@ export default function ExpensesPage() {
             </table>
           </div>
         ) : (
-          <p className="text-gray-500 text-center py-10">No expenses found.</p>
+          <div className="text-center py-16">
+            <div className="w-16 h-16 rounded-full bg-slate-100 flex items-center justify-center mx-auto mb-4">
+              <svg className="w-8 h-8 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+              </svg>
+            </div>
+            <p className="text-slate-600 font-medium">No expenses yet</p>
+            <p className="text-slate-500 text-sm mt-1">Add your first expense to get started</p>
+            <Link href="/expenses/add" className="btn btn-primary mt-4 inline-flex">
+              Add Expense
+            </Link>
+          </div>
         )}
       </div>
     </div>

@@ -57,7 +57,7 @@ public class ExpenseController {
                 .orElse(ResponseEntity.notFound().build());
     }
 
-    @GetMapping("/category/{category}")
+    @GetMapping("/category/{categoryId}")
     public List<Expense> getExpensesByCategory(@PathVariable Long categoryId) {
         return expenseService.getExpensesByCategory(categoryId);
     }

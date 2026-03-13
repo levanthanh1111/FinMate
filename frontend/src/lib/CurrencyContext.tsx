@@ -1,7 +1,7 @@
 'use client';
 
 import { createContext, useContext, useState, useEffect, ReactNode } from 'react';
-import { CurrencyCode, CURRENCY_SYMBOLS, getExchangeRates } from './currencyService';
+import { CurrencyCode, getExchangeRates } from './currencyService';
 
 type CurrencyContextType = {
   currency: CurrencyCode;
@@ -44,18 +44,7 @@ export function CurrencyProvider({ children }: { children: ReactNode }) {
     fetchRates();
   }, []);
 
-  // Load saved currency preference from localStorage
-  useEffect(() => {
-    const savedCurrency = localStorage.getItem('preferredCurrency');
-    if (savedCurrency && Object.keys(CURRENCY_SYMBOLS).includes(savedCurrency)) {
-      setCurrency(savedCurrency as CurrencyCode);
-    }
-  }, []);
-
-  // Save currency preference when it changes
-  useEffect(() => {
-    localStorage.setItem('preferredCurrency', currency);
-  }, [currency]);
+  // System default is always VND on load (user can change during session only)
 
   return (
     <CurrencyContext.Provider value={{ currency, setCurrency, exchangeRates, isLoading }}>

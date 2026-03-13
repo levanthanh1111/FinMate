@@ -2,6 +2,8 @@
 
 import { useState, useEffect } from 'react';
 import { expenseApi } from '@/lib/api';
+import { useCurrency } from '@/lib/CurrencyContext';
+import { convertCurrency, formatCurrency, CURRENCY_SYMBOLS } from '@/lib/currencyService';
 import { Chart as ChartJS, ArcElement, Tooltip, Legend, CategoryScale, LinearScale, PointElement, LineElement, Title } from 'chart.js';
 import { Pie, Line } from 'react-chartjs-2';
 
@@ -9,6 +11,7 @@ import { Pie, Line } from 'react-chartjs-2';
 ChartJS.register(ArcElement, Tooltip, Legend, CategoryScale, LinearScale, PointElement, LineElement, Title);
 
 export default function ReportsPage() {
+  const { currency } = useCurrency();
   const [activeTab, setActiveTab] = useState('monthly');
   const [loading, setLoading] = useState(true);
   const [monthlyData, setMonthlyData] = useState<any>({
@@ -20,9 +23,11 @@ export default function ReportsPage() {
     labels: [],
     amounts: []
   });
+  const [convertedMonthly, setConvertedMonthly] = useState<{ amounts: number[]; total: number }>({ amounts: [], total: 0 });
+  const [convertedTrend, setConvertedTrend] = useState<number[]>([]);
   const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
   const [selectedMonth, setSelectedMonth] = useState(new Date().getMonth() + 1);
-  const [trendPeriod, setTrendPeriod] = useState(6); // Default to 6 months
+  const [trendPeriod, setTrendPeriod] = useState(6);
 
   useEffect(() => {
     if (activeTab === 'monthly') {
@@ -31,6 +36,21 @@ export default function ReportsPage() {
       fetchTrendData();
     }
   }, [activeTab, selectedYear, selectedMonth, trendPeriod]);
+
+  useEffect(() => {
+    const convertAmounts = async () => {
+      const amounts = await Promise.all(
+        monthlyData.amounts.map((a: number) => convertCurrency(a, 'VND', currency))
+      );
+      const total = await convertCurrency(monthlyData.total, 'VND', currency);
+      setConvertedMonthly({ amounts, total });
+      const trendAmounts = await Promise.all(
+        trendData.amounts.map((a: number) => convertCurrency(a, 'VND', currency))
+      );
+      setConvertedTrend(trendAmounts);
+    };
+    if (monthlyData.amounts.length > 0 || trendData.amounts.length > 0) convertAmounts();
+  }, [monthlyData, trendData, currency]);
 
   const fetchMonthlySummary = async () => {
     try {
@@ -95,12 +115,18 @@ export default function ReportsPage() {
     }
   };
 
+  const hasConvertedMonthly = convertedMonthly.amounts.length === monthlyData.amounts.length && monthlyData.amounts.length > 0;
+  const hasConvertedTrend = convertedTrend.length === trendData.amounts.length && trendData.amounts.length > 0;
+  const displayMonthlyAmounts = hasConvertedMonthly ? convertedMonthly.amounts : monthlyData.amounts;
+  const displayMonthlyTotal = hasConvertedMonthly ? convertedMonthly.total : monthlyData.total;
+  const displayTrendAmounts = hasConvertedTrend ? convertedTrend : trendData.amounts;
+
   const monthlyChartData = {
     labels: monthlyData.categories,
     datasets: [
       {
-        label: 'Spending by Category',
-        data: monthlyData.amounts,
+        label: `Spending (${currency})`,
+        data: displayMonthlyAmounts,
         backgroundColor: [
           'rgba(255, 99, 132, 0.6)',
           'rgba(54, 162, 235, 0.6)',
@@ -122,8 +148,8 @@ export default function ReportsPage() {
     labels: trendData.labels,
     datasets: [
       {
-        label: 'Monthly Spending',
-        data: trendData.amounts,
+        label: `Monthly Spending (${currency})`,
+        data: displayTrendAmounts,
         borderColor: 'rgb(53, 162, 235)',
         backgroundColor: 'rgba(53, 162, 235, 0.5)',
         tension: 0.3,
@@ -141,18 +167,21 @@ export default function ReportsPage() {
   const years = Array.from({ length: 6 }, (_, i) => currentYear - i);
 
   return (
-    <div className="space-y-6">
-      <h1 className="text-3xl font-bold">Reports & Insights</h1>
+    <div className="space-y-6 max-w-6xl mx-auto">
+      <div>
+        <h1 className="text-2xl md:text-3xl font-bold text-slate-900 tracking-tight">Reports & Insights</h1>
+        <p className="text-slate-500 mt-1">Analyze your spending patterns</p>
+      </div>
       
-      <div className="flex border-b">
+      <div className="flex gap-1 p-1 bg-slate-100 rounded-lg w-fit">
         <button
-          className={`py-2 px-4 font-medium ${activeTab === 'monthly' ? 'border-b-2 border-blue-600 text-blue-600' : 'text-gray-500'}`}
+          className={`py-2 px-4 rounded-md text-sm font-medium transition-colors ${activeTab === 'monthly' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-600 hover:text-slate-900'}`}
           onClick={() => setActiveTab('monthly')}
         >
           Monthly Summary
         </button>
         <button
-          className={`py-2 px-4 font-medium ${activeTab === 'trends' ? 'border-b-2 border-blue-600 text-blue-600' : 'text-gray-500'}`}
+          className={`py-2 px-4 rounded-md text-sm font-medium transition-colors ${activeTab === 'trends' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-600 hover:text-slate-900'}`}
           onClick={() => setActiveTab('trends')}
         >
           Spending Trends
@@ -161,8 +190,8 @@ export default function ReportsPage() {
       
       {activeTab === 'monthly' ? (
         <div className="space-y-6">
-          <div className="card">
-            <h2 className="text-xl font-semibold mb-4">Monthly Spending Summary</h2>
+          <div className="card-static">
+            <h2 className="text-lg font-semibold text-slate-900 mb-4">Monthly Spending Summary</h2>
             
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
               <div>
@@ -195,12 +224,15 @@ export default function ReportsPage() {
             </div>
             
             {loading ? (
-              <div className="text-center py-10">Loading data...</div>
+              <div className="space-y-4 py-8">
+                <div className="skeleton h-12 w-1/3" />
+                <div className="skeleton h-48 w-full rounded-xl" />
+              </div>
             ) : monthlyData.categories.length > 0 ? (
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div>
                   <h3 className="text-lg font-medium mb-2">Total Spending</h3>
-                  <p className="text-3xl font-bold text-blue-600">${monthlyData.total.toFixed(2)}</p>
+                  <p className="text-3xl font-bold text-sky-600">{formatCurrency(displayMonthlyTotal, currency)}</p>
                   
                   <div className="mt-6">
                     <h3 className="text-lg font-medium mb-2">Top Categories</h3>
@@ -208,7 +240,7 @@ export default function ReportsPage() {
                       {monthlyData.categories.slice(0, 3).map((category: string, index: number) => (
                         <li key={category} className="flex justify-between">
                           <span>{category}</span>
-                          <span className="font-medium">${monthlyData.amounts[index].toFixed(2)}</span>
+                          <span className="font-medium">{formatCurrency(displayMonthlyAmounts[index] ?? 0, currency)}</span>
                         </li>
                       ))}
                     </ul>
@@ -220,7 +252,7 @@ export default function ReportsPage() {
                 </div>
               </div>
             ) : (
-              <div className="text-center py-10 text-gray-500">
+              <div className="text-center py-16 text-slate-500">
                 No data available for this month.
               </div>
             )}
@@ -228,8 +260,8 @@ export default function ReportsPage() {
         </div>
       ) : (
         <div className="space-y-6">
-          <div className="card">
-            <h2 className="text-xl font-semibold mb-4">Spending Trends Over Time</h2>
+          <div className="card-static">
+            <h2 className="text-lg font-semibold text-slate-900 mb-4">Spending Trends Over Time</h2>
             
             <div className="mb-6">
               <label htmlFor="trendPeriod" className="form-label">Time Period</label>
@@ -246,7 +278,7 @@ export default function ReportsPage() {
             </div>
             
             {loading ? (
-              <div className="text-center py-10">Loading data...</div>
+              <div className="skeleton h-80 w-full rounded-xl" />
             ) : trendData.labels.length > 0 ? (
               <div className="h-80">
                 <Line 
@@ -258,7 +290,7 @@ export default function ReportsPage() {
                         beginAtZero: true,
                         title: {
                           display: true,
-                          text: 'Amount ($)'
+                          text: `Amount (${CURRENCY_SYMBOLS[currency]} ${currency})`
                         }
                       },
                       x: {
@@ -272,7 +304,7 @@ export default function ReportsPage() {
                 />
               </div>
             ) : (
-              <div className="text-center py-10 text-gray-500">
+              <div className="text-center py-16 text-slate-500">
                 No trend data available.
               </div>
             )}

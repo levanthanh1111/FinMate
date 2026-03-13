@@ -18,7 +18,18 @@ public interface ExpenseRepository extends JpaRepository<Expense, Long> {
     @Query("SELECT e FROM Expense e WHERE YEAR(e.date) = ?1 AND MONTH(e.date) = ?2")
     List<Expense> findByYearAndMonth(int year, int month);
     
-    @Query("SELECT e.categoryId, SUM(e.amount) FROM Expense e WHERE YEAR(e.date) = ?1 AND MONTH(e.date) = ?2 GROUP BY e.categoryId ORDER BY SUM(e.amount) DESC")
+    @Query(value = """
+                SELECT 
+                    c.name AS category_name,
+                    SUM(amount) AS total_amount
+                FROM expenses e
+                INNER JOIN categories c
+                    ON e.category_id = c.id
+                WHERE date >= make_date(:year, :month, 1)
+                  AND date < make_date(:year, :month, 1) + INTERVAL '1 month'
+                GROUP BY c.name
+                ORDER BY total_amount DESC
+            """, nativeQuery = true)
     List<Object[]> findMonthlySummaryByCategory(int year, int month);
     
     @Query("SELECT YEAR(e.date), MONTH(e.date), SUM(e.amount) FROM Expense e GROUP BY YEAR(e.date), MONTH(e.date) ORDER BY YEAR(e.date), MONTH(e.date)")
