@@ -2,8 +2,10 @@ package com.finmate.api.service;
 
 import com.finmate.api.model.Category;
 import com.finmate.api.model.Expense;
+import com.finmate.api.model.asset.InvestmentAsset;
 import com.finmate.api.repository.CategoryRepository;
 import com.finmate.api.repository.ExpenseRepository;
+import com.finmate.api.repository.InvestmentAssetRepository;
 import org.springframework.stereotype.Service;
 
 import java.math.BigDecimal;
@@ -16,10 +18,12 @@ public class DashboardService {
 
     private final ExpenseRepository expenseRepository;
     private final CategoryRepository categoryRepository;
+    private final InvestmentService investmentService;
 
-    public DashboardService(ExpenseRepository expenseRepository, CategoryRepository categoryRepository) {
+    public DashboardService(ExpenseRepository expenseRepository, CategoryRepository categoryRepository, InvestmentService investmentService) {
         this.expenseRepository = expenseRepository;
         this.categoryRepository = categoryRepository;
+        this.investmentService = investmentService;
     }
 
     private Map<Long, String> getCategoryMap() {
@@ -54,8 +58,16 @@ public class DashboardService {
             // Get recent expenses
             List<Map<String, Object>> recentExpenses = getRecentExpenses(allExpenses);
             
+            // Get total investment value
+            BigDecimal totalInvestmentValue = BigDecimal.ZERO;
+            List<InvestmentAsset> assets = investmentService.getAssetsByUserId(1L); // Assuming user ID 1 for now
+            for (InvestmentAsset asset : assets) {
+                totalInvestmentValue = totalInvestmentValue.add(investmentService.getPortfolioDetail(asset.getId(), BigDecimal.ONE).getCurrentMarketValue());
+            }
+
             // Build response
             dashboardData.put("totalSpending", totalSpending);
+            dashboardData.put("totalInvestmentValue", totalInvestmentValue);
             dashboardData.put("categoryTotals", categoryTotals);
             dashboardData.put("recentExpenses", recentExpenses);
             dashboardData.put("isRealData", true);
