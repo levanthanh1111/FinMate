@@ -144,4 +144,31 @@ export const exchangeRateApi = {
   }
 };
 
+export const investmentApi = {
+  createAsset: async (asset: any) => {
+    const response = await api.post('/investments/assets', asset);
+    return response.data;
+  },
+
+  recordTransaction: async (transaction: any) => {
+    const response = await api.post('/investments/transactions', transaction);
+    return response.data;
+  },
+
+  getAssetsByUserId: async (userId: number) => {
+    const response = await api.get(`/investments/assets/user/${userId}`);
+    return response.data;
+  },
+
+  getTransactionsByAssetId: async (assetId: number) => {
+    const response = await api.get(`/investments/transactions/${assetId}`);
+    return response.data;
+  },
+
+  getPortfolioDetail: async (assetId: number, currentPrice: number) => {
+    const response = await api.get(`/investments/portfolio/${assetId}?currentPrice=${currentPrice}`);
+    return response.data;
+  }
+};
+
 export default api;

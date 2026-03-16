@@ -24,6 +24,8 @@ export default function Dashboard() {
     categories: [],
     amounts: []
   });
+  const [totalInvestmentValue, setTotalInvestmentValue] = useState(0);
+  
   
   // Get currency context
   const { currency, isLoading: currencyLoading } = useCurrency();
@@ -265,6 +267,7 @@ export default function Dashboard() {
         if (data) {
           // Set mock data flag
           setIsMockData(!data.isRealData);
+          setTotalInvestmentValue(data.totalInvestmentValue || 0);
           
           // Process data as needed
           // This would replace the existing data fetching logic
@@ -454,6 +457,13 @@ export default function Dashboard() {
           <div>
             <h3 className="font-semibold text-slate-900 mb-1 group-hover:text-sky-600 transition-colors">Add Expense</h3>
             <p className="text-sm text-slate-500">Record a new transaction</p>
+          </div>
+        </Link>
+
+        <Link href="/investments" className="card border-t-4 border-t-emerald-500 group">
+          <div>
+            <h3 className="font-semibold text-slate-900 mb-1 group-hover:text-emerald-600 transition-colors">My Investments</h3>
+            <p className="text-sm text-slate-500">Total Value: {formatAmount(totalInvestmentValue)}</p>
           </div>
         </Link>
         <Link href="/reports" className="card border-t-4 border-t-violet-500 group">
