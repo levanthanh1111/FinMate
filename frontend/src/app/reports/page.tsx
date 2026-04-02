@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import { expenseApi } from '@/lib/api';
 import { useCurrency } from '@/lib/CurrencyContext';
-import { convertCurrency, formatCurrency, CURRENCY_SYMBOLS } from '@/lib/currencyService';
+import { convertCurrency, convertVndAmounts, formatCurrency, getCurrencyDisplay } from '@/lib/currencyService';
 import { Chart as ChartJS, ArcElement, Tooltip, Legend, CategoryScale, LinearScale, PointElement, LineElement, Title } from 'chart.js';
 import { Pie, Line } from 'react-chartjs-2';
 
@@ -11,7 +11,7 @@ import { Pie, Line } from 'react-chartjs-2';
 ChartJS.register(ArcElement, Tooltip, Legend, CategoryScale, LinearScale, PointElement, LineElement, Title);
 
 export default function ReportsPage() {
-  const { currency } = useCurrency();
+  const { currency, rateSource, rateUpdatedAt } = useCurrency();
   const [activeTab, setActiveTab] = useState('monthly');
   const [loading, setLoading] = useState(true);
   const [monthlyData, setMonthlyData] = useState<any>({
@@ -39,14 +39,10 @@ export default function ReportsPage() {
 
   useEffect(() => {
     const convertAmounts = async () => {
-      const amounts = await Promise.all(
-        monthlyData.amounts.map((a: number) => convertCurrency(a, 'VND', currency))
-      );
+      const amounts = await convertVndAmounts(monthlyData.amounts, currency);
       const total = await convertCurrency(monthlyData.total, 'VND', currency);
       setConvertedMonthly({ amounts, total });
-      const trendAmounts = await Promise.all(
-        trendData.amounts.map((a: number) => convertCurrency(a, 'VND', currency))
-      );
+      const trendAmounts = await convertVndAmounts(trendData.amounts, currency);
       setConvertedTrend(trendAmounts);
     };
     if (monthlyData.amounts.length > 0 || trendData.amounts.length > 0) convertAmounts();
@@ -172,6 +168,17 @@ export default function ReportsPage() {
         <h1 className="text-2xl md:text-3xl font-bold text-slate-900 tracking-tight">Reports & Insights</h1>
         <p className="text-slate-500 mt-1">Analyze your spending patterns</p>
       </div>
+
+      {rateSource === 'default' && (
+        <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+          Using default exchange rates right now. Values may slightly differ from live market rates.
+          {rateUpdatedAt && (
+            <p className="mt-1 text-xs text-amber-700">
+              Last updated: {new Date(rateUpdatedAt).toLocaleString()}
+            </p>
+          )}
+        </div>
+      )}
       
       <div className="flex gap-1 p-1 bg-slate-100 rounded-lg w-fit">
         <button
@@ -232,7 +239,7 @@ export default function ReportsPage() {
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div>
                   <h3 className="text-lg font-medium mb-2">Total Spending</h3>
-                  <p className="text-3xl font-bold text-sky-600">{formatCurrency(displayMonthlyTotal, currency)}</p>
+                  <p className="text-3xl font-bold text-sky-600 tabular-nums">{formatCurrency(displayMonthlyTotal, currency)}</p>
                   
                   <div className="mt-6">
                     <h3 className="text-lg font-medium mb-2">Top Categories</h3>
@@ -240,7 +247,7 @@ export default function ReportsPage() {
                       {monthlyData.categories.slice(0, 3).map((category: string, index: number) => (
                         <li key={category} className="flex justify-between">
                           <span>{category}</span>
-                          <span className="font-medium">{formatCurrency(displayMonthlyAmounts[index] ?? 0, currency)}</span>
+                          <span className="font-medium tabular-nums">{formatCurrency(displayMonthlyAmounts[index] ?? 0, currency)}</span>
                         </li>
                       ))}
                     </ul>
@@ -290,7 +297,7 @@ export default function ReportsPage() {
                         beginAtZero: true,
                         title: {
                           display: true,
-                          text: `Amount (${CURRENCY_SYMBOLS[currency]} ${currency})`
+                          text: `Amount (${getCurrencyDisplay(currency)})`
                         }
                       },
                       x: {

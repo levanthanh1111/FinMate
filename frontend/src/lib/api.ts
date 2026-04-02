@@ -80,6 +80,24 @@ export const expenseApi = {
     return response.data;
   },
 
+  // Get expenses by optional filters
+  getFilteredExpenses: async (filters: { categoryId?: number; startDate?: string; endDate?: string }) => {
+    const params = new URLSearchParams();
+
+    if (filters.categoryId !== undefined) {
+      params.append('categoryId', String(filters.categoryId));
+    }
+
+    if (filters.startDate && filters.endDate) {
+      params.append('startDate', filters.startDate);
+      params.append('endDate', filters.endDate);
+    }
+
+    const query = params.toString();
+    const response = await api.get(query ? `/expenses/filter?${query}` : '/expenses/filter');
+    return response.data;
+  },
+
   // Get monthly expenses
   getMonthlyExpenses: async (year: number, month: number) => {
     const response = await api.get(`/expenses/monthly/${year}/${month}`);

@@ -2,7 +2,7 @@
 
 import Dashboard from '@/components/Dashboard';
 import { useCurrency } from '@/lib/CurrencyContext';
-import { CURRENCY_SYMBOLS } from '@/lib/currencyService';
+import { getCurrencyDisplay } from '@/lib/currencyService';
 
 export default function Home() {
   const { currency } = useCurrency();
@@ -15,7 +15,7 @@ export default function Home() {
           <p className="text-slate-500 mt-1">Overview of your spending and categories</p>
         </div>
         <div className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-slate-100 text-sm text-slate-600">
-          Displaying in <span className="font-semibold text-sky-600">{CURRENCY_SYMBOLS[currency]} {currency}</span>
+          Displaying in <span className="font-semibold text-sky-600">{getCurrencyDisplay(currency)}</span>
         </div>
       </div>
       <Dashboard />

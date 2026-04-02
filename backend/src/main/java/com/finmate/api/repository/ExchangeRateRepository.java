@@ -13,4 +13,6 @@ public interface ExchangeRateRepository extends JpaRepository<ExchangeRate, Long
     Optional<ExchangeRate> findFirstByBaseAndDateOrderByCreatedAtDesc(String base, LocalDate date);
 
     Optional<ExchangeRate> findFirstByBaseOrderByCreatedAtDesc(String base);
+
+    boolean existsByBaseAndDate(String base, LocalDate date);
 }

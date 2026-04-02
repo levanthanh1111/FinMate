@@ -6,7 +6,7 @@ import { Chart as ChartJS, ArcElement, Tooltip, Legend, CategoryScale, LinearSca
 import { Pie, Bar } from 'react-chartjs-2';
 import Link from 'next/link';
 import { useCurrency } from '@/lib/CurrencyContext';
-import { convertCurrency, formatCurrency, CurrencyCode, CURRENCY_SYMBOLS } from '@/lib/currencyService';
+import { convertCurrency, convertVndAmounts, formatCurrency, getCurrencyDisplay } from '@/lib/currencyService';
 
 // Register ChartJS components
 ChartJS.register(ArcElement, Tooltip, Legend, CategoryScale, LinearScale, BarElement, Title);
@@ -26,7 +26,7 @@ export default function Dashboard() {
   });
   
   // Get currency context
-  const { currency, isLoading: currencyLoading } = useCurrency();
+  const { currency, isLoading: currencyLoading, rateSource, rateUpdatedAt } = useCurrency();
   
   // State for converted amounts
   const [convertedMonthlySummary, setConvertedMonthlySummary] = useState<any>({
@@ -150,11 +150,7 @@ export default function Dashboard() {
         setIsConverting(true);
         
         // Convert monthly summary amounts
-        const convertedAmounts = await Promise.all(
-          monthlySummary.amounts.map((amount: number) => 
-            convertCurrency(amount, 'VND', currency)
-          )
-        );
+        const convertedAmounts = await convertVndAmounts(monthlySummary.amounts, currency);
         
         const convertedTotal = await convertCurrency(monthlySummary.total, 'VND', currency);
         
@@ -165,11 +161,7 @@ export default function Dashboard() {
         });
         
         // Convert category totals
-        const convertedCategoryAmounts = await Promise.all(
-          categoryTotals.amounts.map((amount: number) => 
-            convertCurrency(amount, 'VND', currency)
-          )
-        );
+        const convertedCategoryAmounts = await convertVndAmounts(categoryTotals.amounts, currency);
         
         setConvertedCategoryTotals({
           categories: categoryTotals.categories,
@@ -177,16 +169,12 @@ export default function Dashboard() {
         });
         
         // Convert recent expenses
-        const expensesWithConvertedAmounts = await Promise.all(
-          recentExpenses.map(async (expense) => {
-            const convertedAmount = await convertCurrency(
-              parseFloat(expense.amount),
-              'VND',
-              currency
-            );
-            return { ...expense, convertedAmount };
-          })
-        );
+        const recentAmounts = recentExpenses.map((expense) => parseFloat(expense.amount));
+        const convertedRecentAmounts = await convertVndAmounts(recentAmounts, currency);
+        const expensesWithConvertedAmounts = recentExpenses.map((expense, index) => ({
+          ...expense,
+          convertedAmount: convertedRecentAmounts[index]
+        }));
         
         setConvertedRecentExpenses(expensesWithConvertedAmounts);
       } catch (error) {
@@ -216,7 +204,7 @@ export default function Dashboard() {
     datasets: [
       {
         label: 'Monthly Spending',
-        data: isConverting ? [] : (convertedMonthlySummary.amounts.length > 0 ? convertedMonthlySummary.amounts : monthlySummary.amounts),
+        data: convertedMonthlySummary.amounts.length > 0 ? convertedMonthlySummary.amounts : monthlySummary.amounts,
         backgroundColor: [
           'rgba(220, 38, 38, 0.7)',  // Red for expenses
           'rgba(37, 99, 235, 0.7)',   // Blue for info
@@ -235,7 +223,7 @@ export default function Dashboard() {
     datasets: [
       {
         label: 'Total Spending by Category',
-        data: isConverting ? [] : (convertedCategoryTotals.amounts.length > 0 ? convertedCategoryTotals.amounts : categoryTotals.amounts),
+        data: convertedCategoryTotals.amounts.length > 0 ? convertedCategoryTotals.amounts : categoryTotals.amounts,
         backgroundColor: 'rgba(37, 99, 235, 0.6)',
         borderColor: 'rgba(37, 99, 235, 1)',
         borderWidth: 1,
@@ -301,15 +289,6 @@ export default function Dashboard() {
     );
   }
   
-  if (isConverting) {
-    return (
-      <div className="flex flex-col items-center justify-center py-20">
-        <div className="w-12 h-12 border-4 border-sky-200 border-t-sky-600 rounded-full animate-spin mb-4" />
-        <p className="text-slate-500">Converting currency...</p>
-      </div>
-    );
-  }
-  
   return (
     <div className="space-y-6 max-w-7xl mx-auto">
       {isMockData && (
@@ -317,6 +296,19 @@ export default function Dashboard() {
           <p className="text-sm text-amber-800">
             <strong>Note:</strong> Displaying mock data as the API is unavailable.
           </p>
+        </div>
+      )}
+
+      {rateSource === 'default' && (
+        <div className="bg-amber-50 border border-amber-200 rounded-xl p-4">
+          <p className="text-sm text-amber-800">
+            <strong>Rate info:</strong> Using default exchange rates. Converted values may differ slightly from live rates.
+          </p>
+          {rateUpdatedAt && (
+            <p className="text-xs text-amber-700 mt-1">
+              Last updated: {new Date(rateUpdatedAt).toLocaleString()}
+            </p>
+          )}
         </div>
       )}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -327,6 +319,7 @@ export default function Dashboard() {
             <p className="stat-value text-rose-600">
               {formatAmount(convertedMonthlySummary.total || monthlySummary.total)}
             </p>
+            {isConverting && <p className="text-xs text-slate-500 mt-1">Updating values...</p>}
           </div>
           
           {monthlySummary.categories.length > 0 ? (
@@ -372,10 +365,10 @@ export default function Dashboard() {
                     y: {
                       beginAtZero: true,
                       title: {
-                        display: true,
-                        text: `Amount (${CURRENCY_SYMBOLS[currency]})`
+                          display: true,
+                          text: `Amount (${getCurrencyDisplay(currency)})`
+                        }
                       }
-                    }
                   },
                   plugins: {
                     tooltip: {
@@ -432,7 +425,7 @@ export default function Dashboard() {
                     <td className="table-cell max-w-xs truncate">
                       {expense.note || '-'}
                     </td>
-                    <td className="table-cell text-right font-medium">
+                     <td className="table-cell text-right font-medium tabular-nums">
                       {expense.convertedAmount 
                         ? formatAmount(expense.convertedAmount)
                         : formatAmount(parseFloat(expense.amount))}
