@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { useCurrency } from '@/lib/CurrencyContext';
-import { CurrencyCode, CURRENCY_SYMBOLS } from '@/lib/currencyService';
+import { CurrencyCode, CURRENCY_SYMBOLS, CURRENCY_LABELS, getCurrencyDisplay } from '@/lib/currencyService';
 
 export default function CurrencySelector() {
   const { currency, setCurrency } = useCurrency();
@@ -24,7 +24,7 @@ export default function CurrencySelector() {
         aria-haspopup="true"
         aria-expanded={isOpen}
       >
-        <span>{CURRENCY_SYMBOLS[currency]} {currency}</span>
+        <span>{getCurrencyDisplay(currency)}</span>
         <svg className={`w-4 h-4 text-slate-400 transition-transform ${isOpen ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
         </svg>
@@ -45,7 +45,8 @@ export default function CurrencySelector() {
                 }`}
                 role="menuitem"
               >
-                {CURRENCY_SYMBOLS[currencyOption]} {currencyOption}
+                <span className="font-medium">{CURRENCY_SYMBOLS[currencyOption]} {currencyOption}</span>
+                <span className="ml-2 text-xs text-slate-400">{CURRENCY_LABELS[currencyOption]}</span>
               </button>
             ))}
           </div>

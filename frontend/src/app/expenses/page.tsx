@@ -4,13 +4,14 @@ import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { expenseApi, categoryApi } from '@/lib/api';
 import { useCurrency } from '@/lib/CurrencyContext';
-import { convertCurrency, formatCurrency } from '@/lib/currencyService';
+import { convertVndAmounts, formatCurrency } from '@/lib/currencyService';
 
 export default function ExpensesPage() {
-  const { currency } = useCurrency();
+  const { currency, rateSource, rateUpdatedAt } = useCurrency();
   const [expenses, setExpenses] = useState<any[]>([]);
   const [categories, setCategories] = useState<{ id: number; name: string }[]>([]);
   const [loading, setLoading] = useState(true);
+  const [isConverting, setIsConverting] = useState(false);
   const [convertedAmounts, setConvertedAmounts] = useState<Record<number, number>>({});
   const [convertedTotal, setConvertedTotal] = useState<number>(0);
   const [filter, setFilter] = useState({
@@ -37,19 +38,26 @@ export default function ExpensesPage() {
 
   useEffect(() => {
     const convertAmounts = async () => {
-      const amounts: Record<number, number> = {};
-      let total = 0;
-      for (const exp of expenses) {
-        const amt = parseFloat(exp.amount) || 0;
-        const converted = await convertCurrency(amt, 'VND', currency);
-        amounts[exp.id] = converted;
-        total += converted;
+      try {
+        setIsConverting(true);
+        const baseAmounts = expenses.map((exp) => parseFloat(exp.amount) || 0);
+        const convertedValues = await convertVndAmounts(baseAmounts, currency);
+        const convertedPairs = expenses.map((exp, index) => [exp.id, convertedValues[index]] as const);
+
+        const amounts = Object.fromEntries(convertedPairs) as Record<number, number>;
+        const total = convertedPairs.reduce((sum, [, value]) => sum + value, 0);
+        setConvertedAmounts(amounts);
+        setConvertedTotal(total);
+      } finally {
+        setIsConverting(false);
       }
-      setConvertedAmounts(amounts);
-      setConvertedTotal(total);
     };
-    if (expenses.length > 0) convertAmounts();
-    else setConvertedTotal(0);
+    if (expenses.length > 0) {
+      convertAmounts();
+    } else {
+      setConvertedTotal(0);
+      setIsConverting(false);
+    }
   }, [expenses, currency]);
 
   const fetchExpenses = async (filters = filter) => {
@@ -127,6 +135,17 @@ export default function ExpensesPage() {
         </Link>
       </div>
 
+      {rateSource === 'default' && (
+        <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+          Using default exchange rates right now. Values may slightly differ from live market rates.
+          {rateUpdatedAt && (
+            <p className="mt-1 text-xs text-amber-700">
+              Last updated: {new Date(rateUpdatedAt).toLocaleString()}
+            </p>
+          )}
+        </div>
+      )}
+
       {/* Filter Form */}
       <div className="card-static">
         <h2 className="text-lg font-semibold text-slate-900 mb-4">Filter</h2>
@@ -186,7 +205,8 @@ export default function ExpensesPage() {
           <h2 className="text-lg font-semibold text-slate-900">Expense List</h2>
           <div className="text-right">
             <span className="text-sm text-slate-500">Total </span>
-            <span className="text-lg font-bold text-slate-900">{formatCurrency(convertedTotal, currency)}</span>
+            <span className="text-lg font-bold text-slate-900 tabular-nums">{formatCurrency(convertedTotal, currency)}</span>
+            {isConverting && <p className="text-xs text-slate-500 mt-1">Updating values...</p>}
           </div>
         </div>
         
@@ -207,7 +227,7 @@ export default function ExpensesPage() {
                 <tr>
                   <th className="table-header-cell">Date</th>
                   <th className="table-header-cell">Category</th>
-                  <th className="table-header-cell">Amount</th>
+                  <th className="table-header-cell text-right">Amount</th>
                   <th className="table-header-cell">Note</th>
                   <th className="table-header-cell text-right">Actions</th>
                 </tr>
@@ -217,7 +237,7 @@ export default function ExpensesPage() {
                   <tr key={expense.id} className="table-row">
                     <td className="table-cell">{new Date(expense.date).toLocaleDateString()}</td>
                     <td className="table-cell font-medium text-slate-800">{getCategoryName(expense.categoryId)}</td>
-                    <td className="table-cell font-semibold text-slate-900">{formatCurrency(convertedAmounts[expense.id] ?? parseFloat(expense.amount), currency)}</td>
+                     <td className="table-cell text-right font-semibold text-slate-900 tabular-nums">{formatCurrency(convertedAmounts[expense.id] ?? parseFloat(expense.amount), currency)}</td>
                     <td className="table-cell max-w-xs truncate text-slate-500">{expense.note || '—'}</td>
                     <td className="table-cell text-right">
                       <div className="flex justify-end gap-2">

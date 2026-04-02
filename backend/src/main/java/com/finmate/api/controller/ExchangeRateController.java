@@ -6,8 +6,11 @@ import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
+import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
 @RestController
@@ -50,7 +53,7 @@ public class ExchangeRateController {
     public ResponseEntity<Map<String, Object>> getLatestRates(
             @RequestParam(defaultValue = "false") boolean fetch) {
         try {
-            Map<String, Object> rates = exchangeRateService.getRates(fetch);
+            Map<String, Object> rates = exchangeRateService.getRatesCached(fetch);
             return ResponseEntity.ok(rates);
         } catch (Exception e) {
             Map<String, Object> errorResponse = new HashMap<>();
@@ -97,6 +100,42 @@ public class ExchangeRateController {
             errorResponse.put("success", false);
             errorResponse.put("error", e.getMessage());
             return ResponseEntity.status(500).body(errorResponse);
+        }
+    }
+
+    @GetMapping("/status")
+    public ResponseEntity<Map<String, Object>> getRateStatus() {
+        return ResponseEntity.ok(exchangeRateService.getRateStatus());
+    }
+
+    @PostMapping("/convert-batch")
+    public ResponseEntity<Map<String, Object>> convertBatch(@RequestBody Map<String, Object> payload) {
+        try {
+            String from = (String) payload.getOrDefault("from", "VND");
+            String to = (String) payload.getOrDefault("to", "USD");
+
+            List<BigDecimal> amounts = new ArrayList<>();
+            Object rawAmounts = payload.get("amounts");
+            if (rawAmounts instanceof List<?> list) {
+                for (Object value : list) {
+                    if (value instanceof Number number) {
+                        amounts.add(BigDecimal.valueOf(number.doubleValue()));
+                    } else if (value instanceof String str && !str.isBlank()) {
+                        amounts.add(new BigDecimal(str));
+                    } else {
+                        amounts.add(BigDecimal.ZERO);
+                    }
+                }
+            }
+
+            Map<String, Object> response = exchangeRateService.convertBatch(from, to, amounts);
+            return ResponseEntity.ok(response);
+        } catch (Exception e) {
+            Map<String, Object> errorResponse = new HashMap<>();
+            errorResponse.put("success", false);
+            errorResponse.put("error", "Failed to convert batch amounts");
+            errorResponse.put("message", e.getMessage());
+            return ResponseEntity.badRequest().body(errorResponse);
         }
     }
 }

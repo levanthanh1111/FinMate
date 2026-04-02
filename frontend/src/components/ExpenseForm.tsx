@@ -4,7 +4,14 @@ import { useState, useEffect } from 'react';
 import { useForm } from 'react-hook-form';
 import { categoryApi } from '@/lib/api';
 import { useCurrency } from '@/lib/CurrencyContext';
-import { CURRENCY_SYMBOLS, convertCurrency } from '@/lib/currencyService';
+import {
+  CURRENCY_SYMBOLS,
+  convertCurrency,
+  formatNumberInput,
+  getCurrencyDisplay,
+  hasMinorUnits,
+  parseMoneyInput
+} from '@/lib/currencyService';
 
 type ExpenseFormProps = {
   initialData?: any;
@@ -14,9 +21,10 @@ type ExpenseFormProps = {
 
 export default function ExpenseForm({ initialData, onSubmit, isEditing = false }: ExpenseFormProps) {
   const { currency } = useCurrency();
-  const { register, handleSubmit, formState: { errors }, reset, setValue } = useForm();
+  const { register, handleSubmit, formState: { errors }, reset, setValue, setError, clearErrors } = useForm();
   const [categories, setCategories] = useState<{ id: number; name: string }[]>([]);
   const [selectedCategoryId, setSelectedCategoryId] = useState<string>(initialData?.categoryId?.toString() || '');
+  const [amountInput, setAmountInput] = useState('');
   
   // Backend format: yyyy-MM-dd HH:mm:ss.SSSSSS
   const formatDateForBackend = (d: Date): string => {
@@ -75,7 +83,7 @@ export default function ExpenseForm({ initialData, onSubmit, isEditing = false }
 
       // Convert backend amount (VND) to selected display currency for input
       convertCurrency(parseFloat(initialData.amount) || 0, 'VND', currency).then((amt) => {
-        setValue('amount', Math.round(amt * 100) / 100);
+        setAmountInput(formatNumberInput(Math.round(amt * 100) / 100, currency));
       });
       setValue('categoryId', initialData.categoryId);
       setValue('note', initialData.note);
@@ -84,13 +92,32 @@ export default function ExpenseForm({ initialData, onSubmit, isEditing = false }
     }
   }, [initialData, setValue, currency]);
   
+  useEffect(() => {
+    if (!initialData) {
+      setAmountInput('');
+    }
+  }, [currency, initialData]);
+
   const handleFormSubmit = async (data: any) => {
+    const parsedAmount = parseMoneyInput(amountInput, currency);
+    if (!Number.isFinite(parsedAmount) || parsedAmount <= 0) {
+      setError('amount', { type: 'manual', message: 'Amount must be greater than 0' });
+      return;
+    }
+
+    if (!hasMinorUnits(currency) && !Number.isInteger(parsedAmount)) {
+      setError('amount', { type: 'manual', message: `${currency} does not use decimal values` });
+      return;
+    }
+
+    clearErrors('amount');
+
     const dateValue = data.date
       ? dateTimeLocalToBackend(data.date)
       : formatDateForBackend(new Date());
 
     // Convert from selected currency to VND for backend storage
-    const amountInDisplayCurrency = parseFloat(data.amount);
+    const amountInDisplayCurrency = parsedAmount;
     const amountInVnd = await convertCurrency(amountInDisplayCurrency, currency, 'VND');
 
     onSubmit({
@@ -102,6 +129,7 @@ export default function ExpenseForm({ initialData, onSubmit, isEditing = false }
     
     if (!isEditing) {
       reset();
+      setAmountInput('');
       setSelectedCategoryId('');
     }
   };
@@ -112,16 +140,23 @@ export default function ExpenseForm({ initialData, onSubmit, isEditing = false }
         <label htmlFor="amount" className="form-label">Amount ({CURRENCY_SYMBOLS[currency]} {currency})</label>
         <input
           id="amount"
-          type="number"
-          step={['VND', 'JPY', 'KRW'].includes(currency) ? '1' : '0.01'}
+          type="text"
+          inputMode="decimal"
           className="form-input"
-          placeholder="0.00"
-          {...register('amount', { 
-            required: 'Amount is required',
-            min: { value: 0.01, message: 'Amount must be greater than 0' },
-            valueAsNumber: true
-          })}
+          placeholder={hasMinorUnits(currency) ? '0.00' : '0'}
+          value={amountInput}
+          onChange={(e) => {
+            setAmountInput(e.target.value);
+            if (errors.amount) clearErrors('amount');
+          }}
+          onBlur={() => {
+            const parsed = parseMoneyInput(amountInput, currency);
+            if (Number.isFinite(parsed)) {
+              setAmountInput(formatNumberInput(parsed, currency));
+            }
+          }}
         />
+        <p className="text-xs text-slate-500 mt-1">Entered in {getCurrencyDisplay(currency)}</p>
         {errors.amount && (
           <p className="text-red-500 text-sm mt-1">{errors.amount.message as string}</p>
         )}
