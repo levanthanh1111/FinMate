@@ -69,6 +69,14 @@ public class ExpenseController {
         return expenseService.getExpensesByDateRange(startDate, endDate);
     }
 
+    @GetMapping("/filter")
+    public List<Expense> getFilteredExpenses(
+            @RequestParam(required = false) Long categoryId,
+            @RequestParam(required = false) LocalDate startDate,
+            @RequestParam(required = false) LocalDate endDate) {
+        return expenseService.getFilteredExpenses(categoryId, startDate, endDate);
+    }
+
     @GetMapping("/monthly/{year}/{month}")
     public List<Expense> getExpensesByMonth(
             @PathVariable int year,

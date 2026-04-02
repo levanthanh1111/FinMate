@@ -6,14 +6,17 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.stereotype.Repository;
 
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.util.List;
 
 @Repository
 public interface ExpenseRepository extends JpaRepository<Expense, Long> {
     
-    List<Expense> findByCategoryId(Long categoryId);
+    List<Expense> findByCategoryIdOrderByDateDesc(Long categoryId);
     
-    List<Expense> findByDateBetweenOrderByDateDesc(LocalDate startDate, LocalDate endDate);
+    List<Expense> findByDateBetweenOrderByDateDesc(LocalDateTime startDate, LocalDateTime endDate);
+
+    List<Expense> findByCategoryIdAndDateBetweenOrderByDateDesc(Long categoryId, LocalDateTime startDate, LocalDateTime endDate);
     
     @Query("SELECT e FROM Expense e WHERE YEAR(e.date) = ?1 AND MONTH(e.date) = ?2")
     List<Expense> findByYearAndMonth(int year, int month);

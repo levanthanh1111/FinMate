@@ -52,18 +52,22 @@ export default function ExpensesPage() {
     else setConvertedTotal(0);
   }, [expenses, currency]);
 
-  const fetchExpenses = async () => {
+  const fetchExpenses = async (filters = filter) => {
     try {
       setLoading(true);
-      let data;
-      
-      if (filter.categoryId) {
-        data = await expenseApi.getExpensesByCategory(parseInt(filter.categoryId, 10));
-      } else if (filter.startDate && filter.endDate) {
-        data = await expenseApi.getExpensesByDateRange(filter.startDate, filter.endDate);
-      } else {
-        data = await expenseApi.getAllExpenses();
+
+      const requestFilters: { categoryId?: number; startDate?: string; endDate?: string } = {};
+
+      if (filters.categoryId) {
+        requestFilters.categoryId = parseInt(filters.categoryId, 10);
       }
+
+      if (filters.startDate && filters.endDate) {
+        requestFilters.startDate = filters.startDate;
+        requestFilters.endDate = filters.endDate;
+      }
+
+      const data = await expenseApi.getFilteredExpenses(requestFilters);
       console.log("Fetched expenses:", data);
       setExpenses(data);
     } catch (error) {
@@ -84,12 +88,13 @@ export default function ExpensesPage() {
   };
 
   const resetFilters = () => {
-    setFilter({
+    const reset = {
       categoryId: '',
       startDate: '',
       endDate: ''
-    });
-    fetchExpenses();
+    };
+    setFilter(reset);
+    fetchExpenses(reset);
   };
 
   const getCategoryName = (categoryId: number) =>

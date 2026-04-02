@@ -6,6 +6,8 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.time.LocalTime;
 import java.util.List;
 import java.util.Optional;
 
@@ -32,11 +34,34 @@ public class ExpenseService {
     }
     
     public List<Expense> getExpensesByCategory(Long categoryId) {
-        return expenseRepository.findByCategoryId(categoryId);
+        return expenseRepository.findByCategoryIdOrderByDateDesc(categoryId);
     }
     
     public List<Expense> getExpensesByDateRange(LocalDate startDate, LocalDate endDate) {
-        return expenseRepository.findByDateBetweenOrderByDateDesc(startDate, endDate);
+        return expenseRepository.findByDateBetweenOrderByDateDesc(startDate.atStartOfDay(), endDate.atTime(LocalTime.MAX));
+    }
+
+    public List<Expense> getFilteredExpenses(Long categoryId, LocalDate startDate, LocalDate endDate) {
+        boolean hasCategory = categoryId != null;
+        boolean hasDateRange = startDate != null && endDate != null;
+
+        if (hasCategory && hasDateRange) {
+            LocalDateTime from = startDate.atStartOfDay();
+            LocalDateTime to = endDate.atTime(LocalTime.MAX);
+            return expenseRepository.findByCategoryIdAndDateBetweenOrderByDateDesc(categoryId, from, to);
+        }
+
+        if (hasCategory) {
+            return expenseRepository.findByCategoryIdOrderByDateDesc(categoryId);
+        }
+
+        if (hasDateRange) {
+            LocalDateTime from = startDate.atStartOfDay();
+            LocalDateTime to = endDate.atTime(LocalTime.MAX);
+            return expenseRepository.findByDateBetweenOrderByDateDesc(from, to);
+        }
+
+        return getAllExpenses();
     }
     
     public List<Expense> getExpensesByMonth(int year, int month) {
