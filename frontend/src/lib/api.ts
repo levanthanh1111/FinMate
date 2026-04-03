@@ -117,6 +117,225 @@ export const expenseApi = {
   }
 };
 
+export const investmentPortfolioApi = {
+  getAllPortfolios: async () => {
+    const response = await api.get('/investment-portfolios');
+    return response.data;
+  },
+
+  getPortfolioById: async (id: number) => {
+    const response = await api.get(`/investment-portfolios/${id}`);
+    return response.data;
+  },
+
+  createPortfolio: async (portfolio: any) => {
+    const response = await api.post('/investment-portfolios', portfolio);
+    return response.data;
+  },
+
+  updatePortfolio: async (id: number, portfolio: any) => {
+    const response = await api.put(`/investment-portfolios/${id}`, portfolio);
+    return response.data;
+  },
+
+  deletePortfolio: async (id: number) => {
+    await api.delete(`/investment-portfolios/${id}`);
+  }
+};
+
+export const investmentAssetApi = {
+  getAllAssets: async () => {
+    const response = await api.get('/investment-assets');
+    return response.data;
+  },
+
+  getAssetById: async (id: number) => {
+    const response = await api.get(`/investment-assets/${id}`);
+    return response.data;
+  },
+
+  searchAssets: async (filters: { query?: string; assetType?: string; active?: boolean }) => {
+    const params = new URLSearchParams();
+
+    if (filters.query) {
+      params.append('query', filters.query);
+    }
+
+    if (filters.assetType) {
+      params.append('assetType', filters.assetType);
+    }
+
+    if (filters.active !== undefined) {
+      params.append('active', String(filters.active));
+    }
+
+    const query = params.toString();
+    const response = await api.get(query ? `/investment-assets/search?${query}` : '/investment-assets/search');
+    return response.data;
+  },
+
+  createAsset: async (asset: any) => {
+    const response = await api.post('/investment-assets', asset);
+    return response.data;
+  },
+
+  updateAsset: async (id: number, asset: any) => {
+    const response = await api.put(`/investment-assets/${id}`, asset);
+    return response.data;
+  },
+
+  deleteAsset: async (id: number) => {
+    await api.delete(`/investment-assets/${id}`);
+  }
+};
+
+export const investmentTransactionApi = {
+  getAllTransactions: async () => {
+    const response = await api.get('/investment-transactions');
+    return response.data;
+  },
+
+  getTransactionById: async (id: number) => {
+    const response = await api.get(`/investment-transactions/${id}`);
+    return response.data;
+  },
+
+  getFilteredTransactions: async (filters: { portfolioId?: number; assetId?: number; type?: string; startDate?: string; endDate?: string }) => {
+    const params = new URLSearchParams();
+
+    if (filters.portfolioId !== undefined) {
+      params.append('portfolioId', String(filters.portfolioId));
+    }
+
+    if (filters.assetId !== undefined) {
+      params.append('assetId', String(filters.assetId));
+    }
+
+    if (filters.type) {
+      params.append('type', filters.type);
+    }
+
+    if (filters.startDate) {
+      params.append('startDate', filters.startDate);
+    }
+
+    if (filters.endDate) {
+      params.append('endDate', filters.endDate);
+    }
+
+    const query = params.toString();
+    const response = await api.get(query ? `/investment-transactions/filter?${query}` : '/investment-transactions/filter');
+    return response.data;
+  },
+
+  createTransaction: async (transaction: any) => {
+    const response = await api.post('/investment-transactions', transaction);
+    return response.data;
+  },
+
+  updateTransaction: async (id: number, transaction: any) => {
+    const response = await api.put(`/investment-transactions/${id}`, transaction);
+    return response.data;
+  },
+
+  deleteTransaction: async (id: number) => {
+    await api.delete(`/investment-transactions/${id}`);
+  }
+};
+
+export const investmentHoldingApi = {
+  getHoldings: async (portfolioId?: number) => {
+    const response = await api.get(portfolioId ? `/investment-holdings?portfolioId=${portfolioId}` : '/investment-holdings');
+    return response.data;
+  },
+
+  getHoldingsSummary: async (portfolioId?: number) => {
+    const response = await api.get(portfolioId ? `/investment-holdings/summary?portfolioId=${portfolioId}` : '/investment-holdings/summary');
+    return response.data;
+  }
+};
+
+export const investmentPriceApi = {
+  getAllLatestPrices: async () => {
+    const response = await api.get('/investment-prices/latest');
+    return response.data;
+  },
+
+  getLatestPriceByAssetId: async (assetId: number) => {
+    const response = await api.get(`/investment-prices/latest/asset?assetId=${assetId}`);
+    return response.data;
+  },
+
+  createLatestPrice: async (payload: any) => {
+    const response = await api.post('/investment-prices/latest', payload);
+    return response.data;
+  },
+
+  updateLatestPrice: async (id: number, payload: any) => {
+    const response = await api.put(`/investment-prices/latest/${id}`, payload);
+    return response.data;
+  },
+
+  deleteLatestPrice: async (id: number) => {
+    await api.delete(`/investment-prices/latest/${id}`);
+  }
+};
+
+export const investmentReportApi = {
+  getTransactionReportRows: async (filters: { portfolioId?: number; assetId?: number; type?: string; startDate?: string; endDate?: string }) => {
+    const params = new URLSearchParams();
+
+    if (filters.portfolioId !== undefined) params.append('portfolioId', String(filters.portfolioId));
+    if (filters.assetId !== undefined) params.append('assetId', String(filters.assetId));
+    if (filters.type) params.append('type', filters.type);
+    if (filters.startDate) params.append('startDate', filters.startDate);
+    if (filters.endDate) params.append('endDate', filters.endDate);
+
+    const query = params.toString();
+    const response = await api.get(query ? `/investment-reports/transactions?${query}` : '/investment-reports/transactions');
+    return response.data;
+  },
+
+  getTransactionReportSummary: async (filters: { portfolioId?: number; assetId?: number; type?: string; startDate?: string; endDate?: string }) => {
+    const params = new URLSearchParams();
+
+    if (filters.portfolioId !== undefined) params.append('portfolioId', String(filters.portfolioId));
+    if (filters.assetId !== undefined) params.append('assetId', String(filters.assetId));
+    if (filters.type) params.append('type', filters.type);
+    if (filters.startDate) params.append('startDate', filters.startDate);
+    if (filters.endDate) params.append('endDate', filters.endDate);
+
+    const query = params.toString();
+    const response = await api.get(query ? `/investment-reports/transactions/summary?${query}` : '/investment-reports/transactions/summary');
+    return response.data;
+  },
+
+  getMonthlyProfitLoss: async (filters: { portfolioId?: number; assetId?: number; startDate?: string; endDate?: string }) => {
+    const params = new URLSearchParams();
+
+    if (filters.portfolioId !== undefined) params.append('portfolioId', String(filters.portfolioId));
+    if (filters.assetId !== undefined) params.append('assetId', String(filters.assetId));
+    if (filters.startDate) params.append('startDate', filters.startDate);
+    if (filters.endDate) params.append('endDate', filters.endDate);
+
+    const query = params.toString();
+    const response = await api.get(query ? `/investment-reports/monthly-profit-loss?${query}` : '/investment-reports/monthly-profit-loss');
+    return response.data;
+  },
+
+  getOverview: async (filters: { portfolioId?: number; startDate?: string; endDate?: string }) => {
+    const params = new URLSearchParams();
+
+    if (filters.portfolioId !== undefined) params.append('portfolioId', String(filters.portfolioId));
+    if (filters.startDate) params.append('startDate', filters.startDate);
+    if (filters.endDate) params.append('endDate', filters.endDate);
+
+    const query = params.toString();
+    const response = await api.get(query ? `/investment-reports/overview?${query}` : '/investment-reports/overview');
+    return response.data;
+  }
+};
+
 // Dashboard API
 export const dashboardApi = {
   // Get dashboard data
