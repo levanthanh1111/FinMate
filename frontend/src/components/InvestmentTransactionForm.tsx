@@ -311,24 +311,24 @@ export default function InvestmentTransactionForm({ initialData, onSubmit, isEdi
           id="note"
           className="form-input"
           rows={3}
-          placeholder="Add any note for this transaction"
+          placeholder="Note"
           {...register('note')}
         />
       </div>
 
       <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
-        <h3 className="text-sm font-semibold text-slate-900 mb-2">Transaction Preview</h3>
+        <h3 className="text-sm font-semibold text-slate-900 mb-2">Preview</h3>
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-sm">
           <div>
-            <p className="text-slate-500">Gross Amount</p>
+              <p className="text-slate-500">Gross</p>
             <p className="font-medium text-slate-900 tabular-nums">{formatCurrency(grossAmount, selectedCurrency as any)}</p>
           </div>
           <div>
-            <p className="text-slate-500">Fees + Taxes</p>
+              <p className="text-slate-500">Fees + Taxes</p>
             <p className="font-medium text-slate-900 tabular-nums">{formatCurrency(totalCharges, selectedCurrency as any)}</p>
           </div>
           <div>
-            <p className="text-slate-500">Net Cash Flow</p>
+              <p className="text-slate-500">Net</p>
             <p className={`font-medium tabular-nums ${netCashFlow >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>
               {formatCurrency(netCashFlow, selectedCurrency as any)}
             </p>

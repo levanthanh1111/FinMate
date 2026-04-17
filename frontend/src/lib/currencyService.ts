@@ -213,3 +213,18 @@ export function formatCurrency(amount: number, currencyCode: CurrencyCode): stri
     maximumFractionDigits
   })}`;
 }
+
+export function formatCompactCurrency(amount: number, currencyCode: CurrencyCode): string {
+  const locale = getCurrencyLocale(currencyCode);
+  const absAmount = Math.abs(amount);
+
+  if (absAmount < 1000) {
+    return formatCurrency(amount, currencyCode);
+  }
+
+  return `${CURRENCY_SYMBOLS[currencyCode]}${new Intl.NumberFormat(locale, {
+    notation: 'compact',
+    minimumFractionDigits: 0,
+    maximumFractionDigits: absAmount < 1000000 ? 1 : 2,
+  }).format(amount)}`;
+}

@@ -1,14 +1,13 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import {expenseApi, dashboardApi, categoryApi} from '@/lib/api';
+import { expenseApi, dashboardApi, categoryApi } from '@/lib/api';
 import { Chart as ChartJS, ArcElement, Tooltip, Legend, CategoryScale, LinearScale, BarElement, Title } from 'chart.js';
 import { Pie, Bar } from 'react-chartjs-2';
 import Link from 'next/link';
 import { useCurrency } from '@/lib/CurrencyContext';
 import { convertCurrency, convertVndAmounts, formatCurrency, getCurrencyDisplay } from '@/lib/currencyService';
 
-// Register ChartJS components
 ChartJS.register(ArcElement, Tooltip, Legend, CategoryScale, LinearScale, BarElement, Title);
 
 export default function Dashboard() {
@@ -18,113 +17,96 @@ export default function Dashboard() {
   const [monthlySummary, setMonthlySummary] = useState<any>({
     categories: [],
     amounts: [],
-    total: 0
+    total: 0,
   });
   const [categoryTotals, setCategoryTotals] = useState<any>({
     categories: [],
-    amounts: []
+    amounts: [],
   });
-  
-  // Get currency context
   const { currency, isLoading: currencyLoading, rateSource, rateUpdatedAt } = useCurrency();
-  
-  // State for converted amounts
   const [convertedMonthlySummary, setConvertedMonthlySummary] = useState<any>({
     categories: [],
     amounts: [],
-    total: 0
+    total: 0,
   });
   const [convertedCategoryTotals, setConvertedCategoryTotals] = useState<any>({
     categories: [],
-    amounts: []
+    amounts: [],
   });
   const [convertedRecentExpenses, setConvertedRecentExpenses] = useState<any[]>([]);
   const [isConverting, setIsConverting] = useState(false);
-  // Check if we're using mock data - moved to top level
   const [isMockData, setIsMockData] = useState(false);
 
-  // Mock data for when the API is unavailable
   const mockMonthlySummary = {
     categories: ['Food', 'Transportation', 'Entertainment', 'Utilities', 'Shopping'],
     amounts: [350, 200, 150, 120, 280],
-    total: 1100
+    total: 1100,
   };
 
   const mockRecentExpenses = [
-    { id: 1, description: 'Grocery shopping', amount: 85.50, date: '2023-11-15', category: 'Food' },
-    { id: 2, description: 'Movie tickets', amount: 32.00, date: '2023-11-14', category: 'Entertainment' },
+    { id: 1, description: 'Grocery shopping', amount: 85.5, date: '2023-11-15', category: 'Food' },
+    { id: 2, description: 'Movie tickets', amount: 32, date: '2023-11-14', category: 'Entertainment' },
     { id: 3, description: 'Uber ride', amount: 24.75, date: '2023-11-13', category: 'Transportation' },
-    { id: 4, description: 'Electricity bill', amount: 95.20, date: '2023-11-12', category: 'Utilities' },
-    { id: 5, description: 'New shoes', amount: 120.00, date: '2023-11-11', category: 'Shopping' }
+    { id: 4, description: 'Electricity bill', amount: 95.2, date: '2023-11-12', category: 'Utilities' },
+    { id: 5, description: 'New shoes', amount: 120, date: '2023-11-11', category: 'Shopping' },
   ];
 
   const mockCategoryTotals = {
     categories: ['Food', 'Shopping', 'Utilities', 'Entertainment', 'Transportation'],
-    amounts: [350, 280, 120, 150, 200]
+    amounts: [350, 280, 120, 150, 200],
   };
 
   useEffect(() => {
     const fetchDashboardData = async () => {
       try {
         setLoading(true);
-        
-        // Get current year and month
         const now = new Date();
         const currentYear = now.getFullYear();
         const currentMonth = now.getMonth() + 1;
-        
+
         try {
-          // Fetch data in parallel
           const [recentData, summaryData] = await Promise.all([
             expenseApi.getAllExpenses(),
-            expenseApi.getMonthlySummary(currentYear, currentMonth)
+            expenseApi.getMonthlySummary(currentYear, currentMonth),
           ]);
-          
-          // Process recent expenses
+
           setRecentExpenses(recentData.slice(0, 5));
-          
-          // Process monthly summary
-          const categories: string[] = [];
+
+          const categoriesList: string[] = [];
           const amounts: number[] = [];
           let total = 0;
-          
+
           summaryData.forEach((item: any) => {
-            categories.push(item[0]);
+            categoriesList.push(item[0]);
             const amount = parseFloat(item[1]);
             amounts.push(amount);
             total += amount;
           });
-          
+
           setMonthlySummary({
-            categories,
+            categories: categoriesList,
             amounts,
-            total
+            total,
           });
-          
-          // Process category totals for bar chart
-          const categoryMap = new Map();
+
+          const categoryMap = new Map<string, number>();
           recentData.forEach((expense: any) => {
-            const category = expense.category;
             const amount = parseFloat(expense.amount);
-            
-            if (categoryMap.has(category)) {
-              categoryMap.set(category, categoryMap.get(category) + amount);
-            } else {
-              categoryMap.set(category, amount);
-            }
+            if (Number.isNaN(amount)) return;
+
+            categoryMap.set(expense.category, (categoryMap.get(expense.category) ?? 0) + amount);
           });
-          
+
           const sortedCategories = Array.from(categoryMap.entries())
             .sort((a, b) => b[1] - a[1])
             .slice(0, 5);
-          
+
           setCategoryTotals({
-            categories: sortedCategories.map(item => item[0]),
-            amounts: sortedCategories.map(item => item[1])
+            categories: sortedCategories.map((item) => item[0]),
+            amounts: sortedCategories.map((item) => item[1]),
           });
         } catch (error) {
           console.error('Error fetching dashboard data:', error);
-          // Use mock data when API is unavailable
           setMonthlySummary(mockMonthlySummary);
           setRecentExpenses(mockRecentExpenses);
           setCategoryTotals(mockCategoryTotals);
@@ -135,55 +117,51 @@ export default function Dashboard() {
         setLoading(false);
       }
     };
-    
+
     fetchDashboardData();
   }, []);
-  
-  // Effect to convert amounts when currency changes
+
   useEffect(() => {
     const convertAmounts = async () => {
       if (loading || currencyLoading || monthlySummary.categories.length === 0) {
         return;
       }
-      
+
       try {
         setIsConverting(true);
-        
-        // Convert monthly summary amounts
+
         const convertedAmounts = await convertVndAmounts(monthlySummary.amounts, currency);
-        
         const convertedTotal = await convertCurrency(monthlySummary.total, 'VND', currency);
-        
+
         setConvertedMonthlySummary({
           categories: monthlySummary.categories,
           amounts: convertedAmounts,
-          total: convertedTotal
+          total: convertedTotal,
         });
-        
-        // Convert category totals
+
         const convertedCategoryAmounts = await convertVndAmounts(categoryTotals.amounts, currency);
-        
+
         setConvertedCategoryTotals({
           categories: categoryTotals.categories,
-          amounts: convertedCategoryAmounts
+          amounts: convertedCategoryAmounts,
         });
-        
-        // Convert recent expenses
+
         const recentAmounts = recentExpenses.map((expense) => parseFloat(expense.amount));
         const convertedRecentAmounts = await convertVndAmounts(recentAmounts, currency);
-        const expensesWithConvertedAmounts = recentExpenses.map((expense, index) => ({
-          ...expense,
-          convertedAmount: convertedRecentAmounts[index]
-        }));
-        
-        setConvertedRecentExpenses(expensesWithConvertedAmounts);
+
+        setConvertedRecentExpenses(
+          recentExpenses.map((expense, index) => ({
+            ...expense,
+            convertedAmount: convertedRecentAmounts[index],
+          })),
+        );
       } catch (error) {
         console.error('Error converting currency:', error);
       } finally {
         setIsConverting(false);
       }
     };
-    
+
     convertAmounts();
   }, [currency, monthlySummary, categoryTotals, recentExpenses, loading, currencyLoading]);
 
@@ -196,24 +174,48 @@ export default function Dashboard() {
         console.error('Error fetching categories:', error);
       }
     };
+
     fetchCategories();
   }, []);
+
+  useEffect(() => {
+    const fetchDashboardData = async () => {
+      try {
+        const data = await dashboardApi.getDashboardData();
+        if (data) {
+          setIsMockData(!data.isRealData);
+        }
+      } catch (error) {
+        console.error('Error fetching dashboard data:', error);
+      }
+    };
+
+    // fetchDashboardData();
+  }, []);
+
+  const displayMonthlyAmounts = convertedMonthlySummary.amounts.length > 0 ? convertedMonthlySummary.amounts : monthlySummary.amounts;
+  const displayMonthlyTotal = convertedMonthlySummary.total || monthlySummary.total;
+  const displayCategoryTotals = convertedCategoryTotals.amounts.length > 0 ? convertedCategoryTotals.amounts : categoryTotals.amounts;
+  const displayRecentExpenses = convertedRecentExpenses.length > 0 ? convertedRecentExpenses : recentExpenses;
+  const topCategories = monthlySummary.categories.slice(0, 3).map((category: string, index: number) => ({
+    name: category,
+    amount: displayMonthlyAmounts[index] ?? 0,
+  }));
+  const averageSpend = displayRecentExpenses.length > 0 ? displayRecentExpenses.reduce((sum, expense) => sum + (expense.convertedAmount ?? parseFloat(expense.amount) ?? 0), 0) / displayRecentExpenses.length : 0;
+  const rangeLabel = new Date().toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
+  const latestExpenseAmount = displayRecentExpenses[0] ? (displayRecentExpenses[0].convertedAmount ?? parseFloat(displayRecentExpenses[0].amount) ?? 0) : 0;
+  const latestExpenseLabel = displayRecentExpenses[0]?.note || displayRecentExpenses[0]?.description || 'Recent expense';
+  const secondExpenseAmount = displayRecentExpenses[1] ? (displayRecentExpenses[1].convertedAmount ?? parseFloat(displayRecentExpenses[1].amount) ?? 0) : 0;
+  const secondExpenseLabel = displayRecentExpenses[1]?.note || displayRecentExpenses[1]?.description || 'Recent activity';
 
   const pieChartData = {
     labels: monthlySummary.categories,
     datasets: [
       {
         label: 'Monthly Spending',
-        data: convertedMonthlySummary.amounts.length > 0 ? convertedMonthlySummary.amounts : monthlySummary.amounts,
-        backgroundColor: [
-          'rgba(220, 38, 38, 0.7)',  // Red for expenses
-          'rgba(37, 99, 235, 0.7)',   // Blue for info
-          'rgba(22, 163, 74, 0.7)',   // Green for income
-          'rgba(249, 115, 22, 0.7)',  // Orange
-          'rgba(139, 92, 246, 0.7)',  // Purple
-          'rgba(20, 184, 166, 0.7)',  // Teal
-        ],
-        borderWidth: 1,
+        data: displayMonthlyAmounts,
+        backgroundColor: ['#0056D2', '#2A6B2C', '#B91D20', '#6C7AA8', '#A66D1F', '#4A5F7A'],
+        borderWidth: 0,
       },
     ],
   };
@@ -223,245 +225,318 @@ export default function Dashboard() {
     datasets: [
       {
         label: 'Total Spending by Category',
-        data: convertedCategoryTotals.amounts.length > 0 ? convertedCategoryTotals.amounts : categoryTotals.amounts,
-        backgroundColor: 'rgba(37, 99, 235, 0.6)',
-        borderColor: 'rgba(37, 99, 235, 1)',
-        borderWidth: 1,
-        borderRadius: 4,
+        data: displayCategoryTotals,
+        backgroundColor: '#0056D2',
+        borderRadius: 999,
+        borderSkipped: false as const,
       },
     ],
   };
 
   const formatDate = (dateString: string) => {
     const date = new Date(dateString);
-    return date.toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
-  };
-  
-  // Format currency based on selected currency
-  const formatAmount = (amount: number) => {
-    return formatCurrency(amount, currency);
+    return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
   };
 
-  const getCategoryName = (categoryId: number) =>
-  categories.find(c => c.id === categoryId)?.name ?? `Category ${categoryId}`;
+  const formatAmount = (amount: number) => formatCurrency(amount, currency);
 
-  // Use dashboardApi instead of direct API calls when available
-  useEffect(() => {
-    const fetchDashboardData = async () => {
-      try {
-        const data = await dashboardApi.getDashboardData();
-        if (data) {
-          // Set mock data flag
-          setIsMockData(!data.isRealData);
-          
-          // Process data as needed
-          // This would replace the existing data fetching logic
-        }
-      } catch (error) {
-        console.error('Error fetching dashboard data:', error);
-        // We're already falling back to mock data in the existing code
-      }
-    };
-    
-    // Uncomment when backend is ready
-    // fetchDashboardData();
-  }, []);
+  const getCategoryName = (categoryId: number) => categories.find((category) => category.id === categoryId)?.name ?? `Category ${categoryId}`;
 
   if (loading || currencyLoading) {
     return (
-      <div className="space-y-6 max-w-7xl mx-auto">
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          <div className="card-static h-80">
-            <div className="skeleton h-6 w-1/3 mb-4" />
-            <div className="skeleton h-12 w-full mb-6" />
-            <div className="skeleton h-48 w-full rounded-lg" />
+      <div className="mx-auto max-w-7xl space-y-6">
+        <div className="grid gap-6 lg:grid-cols-[1.4fr_0.9fr]">
+          <div className="editorial-panel min-h-[24rem]">
+            <div className="skeleton h-5 w-28" />
+            <div className="mt-6 skeleton h-20 w-2/3" />
+            <div className="mt-10 grid gap-4 md:grid-cols-3">
+              <div className="skeleton h-24 rounded-[1.5rem]" />
+              <div className="skeleton h-24 rounded-[1.5rem]" />
+              <div className="skeleton h-24 rounded-[1.5rem]" />
+            </div>
           </div>
-          <div className="card-static h-80">
-            <div className="skeleton h-6 w-1/3 mb-4" />
-            <div className="skeleton h-48 w-full rounded-lg" />
+          <div className="editorial-panel min-h-[24rem]">
+            <div className="skeleton h-full rounded-[1.5rem]" />
           </div>
         </div>
-        <div className="card-static h-64">
-          <div className="skeleton h-6 w-1/4 mb-4" />
-          <div className="skeleton h-40 w-full rounded-lg" />
+        <div className="grid gap-6 xl:grid-cols-[1.05fr_0.95fr]">
+          <div className="editorial-panel min-h-[26rem]">
+            <div className="skeleton h-full rounded-[1.5rem]" />
+          </div>
+          <div className="editorial-panel min-h-[26rem]">
+            <div className="skeleton h-full rounded-[1.5rem]" />
+          </div>
         </div>
       </div>
     );
   }
-  
+
   return (
-    <div className="space-y-6 max-w-7xl mx-auto">
-      {isMockData && (
-        <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 mb-6">
-          <p className="text-sm text-amber-800">
-            <strong>Note:</strong> Displaying mock data as the API is unavailable.
-          </p>
+    <div className="mx-auto max-w-7xl space-y-6">
+      {(isMockData || rateSource === 'default') && (
+        <div className="grid gap-3 md:grid-cols-2">
+          {isMockData && (
+            <div className="rounded-[1.5rem] bg-amber-50 px-5 py-4 text-sm text-amber-800">
+              <span className="font-semibold">Sample mode.</span> Dashboard data is falling back to mock values while the API is unavailable.
+            </div>
+          )}
+          {rateSource === 'default' && (
+            <div className="rounded-[1.5rem] bg-blue-50 px-5 py-4 text-sm text-blue-900">
+              <span className="font-semibold">Rate note.</span> Using default exchange rates for {getCurrencyDisplay(currency)}.
+              {rateUpdatedAt && <span className="ml-1 text-blue-700">Updated {new Date(rateUpdatedAt).toLocaleString()}.</span>}
+            </div>
+          )}
         </div>
       )}
 
-      {rateSource === 'default' && (
-        <div className="bg-amber-50 border border-amber-200 rounded-xl p-4">
-          <p className="text-sm text-amber-800">
-            <strong>Rate info:</strong> Using default exchange rates. Converted values may differ slightly from live rates.
-          </p>
-          {rateUpdatedAt && (
-            <p className="text-xs text-amber-700 mt-1">
-              Last updated: {new Date(rateUpdatedAt).toLocaleString()}
-            </p>
-          )}
-        </div>
-      )}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        <div className="card-static border-l-4 border-l-sky-500">
-          <h2 className="text-lg font-semibold mb-4 text-slate-900">Monthly Overview</h2>
-          <div className="mb-6 bg-slate-50 p-4 rounded-xl">
-            <p className="stat-label">Total Spending</p>
-            <p className="stat-value text-rose-600">
-              {formatAmount(convertedMonthlySummary.total || monthlySummary.total)}
-            </p>
-            {isConverting && <p className="text-xs text-slate-500 mt-1">Updating values...</p>}
+      <section className="grid gap-6 xl:grid-cols-[1.55fr_0.9fr]">
+        <div className="space-y-6">
+          <div className="editorial-panel relative min-h-[34rem] overflow-hidden">
+            <div className="absolute inset-y-0 right-[-8%] hidden w-1/2 rounded-full bg-[radial-gradient(circle,rgba(0,86,210,0.18),transparent_62%)] blur-2xl lg:block" />
+            <div className="relative flex h-full flex-col justify-between space-y-8">
+              <div className="flex flex-col gap-5 md:flex-row md:items-start md:justify-between">
+                <div className="space-y-3">
+                  <p className="eyebrow">Total Net Worth</p>
+                  <h2 className="font-[family:var(--font-manrope)] text-5xl font-semibold leading-none tracking-[-0.06em] text-slate-900 md:text-7xl">
+                    {formatAmount(displayMonthlyTotal)}
+                  </h2>
+                </div>
+
+                <div className="rounded-full bg-white/80 px-4 py-2 text-sm text-slate-600 shadow-sm">
+                  {rangeLabel}
+                </div>
+              </div>
+
+              <div className="grid gap-4 md:grid-cols-[1.1fr_0.9fr_0.9fr]">
+                <div className="rounded-[1.75rem] bg-[linear-gradient(145deg,rgba(0,64,161,0.98)_0%,rgba(0,86,210,0.96)_100%)] p-6 text-white shadow-[0_22px_50px_rgba(0,86,210,0.24)]">
+                  <p className="eyebrow !text-blue-100">Wealth Glance</p>
+                  <p className="mt-4 text-sm text-blue-100">Primary account position</p>
+                  <p className="mt-3 font-[family:var(--font-manrope)] text-4xl font-semibold tracking-[-0.05em]">
+                    {formatAmount(displayMonthlyTotal)}
+                  </p>
+                  <div className="mt-8 flex items-end justify-between gap-4">
+                    <div>
+                      <p className="text-xs uppercase tracking-[0.22em] text-blue-100/80">Average Ticket</p>
+                      <p className="mt-2 text-lg font-semibold">{formatAmount(averageSpend)}</p>
+                    </div>
+                    <div className="h-14 w-28 rounded-full bg-[linear-gradient(180deg,rgba(255,255,255,0.24)_0%,rgba(255,255,255,0.02)_100%)]" />
+                  </div>
+                </div>
+
+                <div className="editorial-subpanel">
+                  <p className="eyebrow">Tracked Categories</p>
+                  <p className="mt-4 font-[family:var(--font-manrope)] text-3xl font-semibold tracking-[-0.04em] text-slate-900">
+                    {monthlySummary.categories.length}
+                  </p>
+                </div>
+
+                <div className="editorial-subpanel">
+                  <p className="eyebrow">Primary Action</p>
+                  <h3 className="mt-4 font-[family:var(--font-manrope)] text-2xl font-semibold tracking-[-0.04em] text-slate-900">Add expense</h3>
+                  <Link href="/expenses/add" className="mt-5 inline-flex rounded-full bg-[linear-gradient(135deg,#0040A1_0%,#0056D2_100%)] px-4 py-2 text-sm font-semibold text-white transition-transform hover:scale-[1.02]">
+                    Add Transaction
+                  </Link>
+                </div>
+              </div>
+
+              <div className="grid gap-4 md:grid-cols-[1.1fr_0.9fr]">
+                <div className="editorial-subpanel min-h-[15rem]">
+                  <div className="flex items-center justify-between">
+                    <div>
+                    <p className="eyebrow">Spending Mix</p>
+                    <h3 className="mt-2 text-2xl font-semibold text-slate-900">Where the month went</h3>
+                  </div>
+                  {isConverting && <span className="text-xs text-slate-500">Updating values...</span>}
+                </div>
+                <div className="mt-6 h-64">
+                  {monthlySummary.categories.length > 0 ? (
+                    <Pie
+                      data={pieChartData}
+                      options={{
+                        maintainAspectRatio: false,
+                        plugins: {
+                          legend: {
+                            position: 'bottom',
+                            labels: {
+                              boxWidth: 10,
+                              boxHeight: 10,
+                              color: '#424654',
+                              padding: 18,
+                              usePointStyle: true,
+                            },
+                          },
+                          tooltip: {
+                            callbacks: {
+                              label(context) {
+                                return `${context.label}: ${formatAmount(context.raw as number)}`;
+                              },
+                            },
+                          },
+                        },
+                      }}
+                    />
+                  ) : (
+                    <div className="flex h-full items-center justify-center rounded-[1.5rem] bg-slate-100/70 text-slate-500">
+                      No data available for this month.
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              <div className="editorial-subpanel">
+                <p className="eyebrow">Top Categories</p>
+                <h3 className="mt-2 text-2xl font-semibold text-slate-900">Top categories</h3>
+                <div className="mt-6 space-y-4">
+                  {topCategories.length > 0 ? (
+                    topCategories.map((item, index) => (
+                      <div key={item.name} className="rounded-[1.25rem] bg-slate-100/70 px-4 py-4">
+                        <div className="flex items-start justify-between gap-4">
+                          <div>
+                            <p className="text-xs uppercase tracking-[0.22em] text-slate-400">0{index + 1}</p>
+                            <p className="mt-2 text-lg font-semibold text-slate-900 clamp-1">{item.name}</p>
+                          </div>
+                          <p className="font-[family:var(--font-manrope)] text-xl font-semibold tracking-[-0.03em] text-slate-900">
+                            {formatAmount(item.amount)}
+                          </p>
+                        </div>
+                      </div>
+                    ))
+                  ) : (
+                    <p className="text-sm text-slate-500">No category highlights yet.</p>
+                  )}
+                </div>
+                </div>
+              </div>
+            </div>
           </div>
-          
-          {monthlySummary.categories.length > 0 ? (
-            <div className="h-64">
-              <Pie data={pieChartData} options={{ 
-                maintainAspectRatio: false,
-                plugins: {
-                  legend: {
-                    position: 'bottom',
-                    labels: {
-                      boxWidth: 12,
-                      padding: 15
-                    }
-                  },
-                  tooltip: {
-                    callbacks: {
-                      label: function(context) {
-                        const label = context.label || '';
-                        const value = context.raw;
-                        return `${label}: ${formatAmount(value as number)}`;
-                      }
-                    }
-                  }
-                }
-              }} />
+
+          <section className="editorial-panel">
+            <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
+              <div>
+                <p className="eyebrow">Recent Ledger</p>
+                <h3 className="mt-2 text-3xl font-semibold text-slate-900">Recent activity</h3>
+              </div>
+              <Link href="/expenses" className="btn btn-secondary self-start md:self-auto">
+                View All Transactions
+              </Link>
             </div>
-          ) : (
-            <div className="text-center py-8 bg-slate-50 rounded-xl">
-              <p className="text-slate-500">No data available for this month</p>
-            </div>
-          )}
-        </div>
-        
-        <div className="card-static border-l-4 border-l-violet-500">
-          <h2 className="text-lg font-semibold mb-4 text-slate-900">Top Categories</h2>
-          {categoryTotals.categories.length > 0 ? (
-            <div className="h-64">
-              <Bar 
-                data={barChartData} 
-                options={{
-                  maintainAspectRatio: false,
-                  scales: {
-                    y: {
-                      beginAtZero: true,
-                      title: {
-                          display: true,
-                          text: `Amount (${getCurrencyDisplay(currency)})`
-                        }
-                      }
-                  },
-                  plugins: {
-                    tooltip: {
-                      callbacks: {
-                        label: function(context) {
-                          const label = context.dataset.label || '';
-                          const value = context.raw;
-                          return `${label}: ${formatAmount(value as number)}`;
-                        }
-                      }
-                    }
-                  }
-                }} 
-              />
-            </div>
-          ) : (
-            <div className="text-center py-8 bg-slate-50 rounded-xl">
-              <p className="text-slate-500">No category data available</p>
-            </div>
-          )}
-        </div>
-      </div>
-      
-      <div className="card-static border-l-4 border-l-rose-500">
-        <div className="flex justify-between items-center mb-4">
-          <h2 className="text-lg font-semibold text-slate-900">
-            Recent Expenses
-          </h2>
-          <Link href="/expenses" className="btn btn-ghost py-1.5 px-3 text-sm">
-            View All
-          </Link>
-        </div>
-        
-        {recentExpenses.length > 0 ? (
-          <div className="table-container">
-            <table className="table-default">
-              <thead className="table-header">
-                <tr>
-                  <th className="table-header-cell">Date</th>
-                  <th className="table-header-cell">Category</th>
-                  <th className="table-header-cell">Note</th>
-                  <th className="table-header-cell text-right">Amount</th>
-                </tr>
-              </thead>
-              <tbody className="table-body">
-                {(convertedRecentExpenses.length > 0 ? convertedRecentExpenses : recentExpenses).map((expense) => (
-                  <tr key={expense.id} className="table-row">
-                    <td className="table-cell">
-                      {formatDate(expense.date)}
-                    </td>
-                    <td className="table-cell font-medium">
-                      {getCategoryName(expense.categoryId)}
-                    </td>
-                    <td className="table-cell max-w-xs truncate">
-                      {expense.note || '-'}
-                    </td>
-                     <td className="table-cell text-right font-medium tabular-nums">
-                      {expense.convertedAmount 
-                        ? formatAmount(expense.convertedAmount)
-                        : formatAmount(parseFloat(expense.amount))}
-                    </td>
-                  </tr>
+
+            {displayRecentExpenses.length > 0 ? (
+              <div className="mt-6 overflow-hidden rounded-[1.5rem] bg-white">
+                {displayRecentExpenses.map((expense) => (
+                  <div key={expense.id} className="grid gap-3 border-b border-slate-100/80 px-5 py-4 last:border-b-0 md:grid-cols-[0.9fr_1fr_1.5fr_0.9fr] md:items-center">
+                    <p className="text-sm text-slate-500">{formatDate(expense.date)}</p>
+                    <p className="font-medium text-slate-900">{getCategoryName(expense.categoryId)}</p>
+                    <p className="clamp-1 text-sm text-slate-500">{expense.note || expense.description || 'No note provided'}</p>
+                    <p className="text-left font-[family:var(--font-manrope)] text-lg font-semibold tracking-[-0.03em] text-slate-900 md:text-right">
+                      {formatAmount(expense.convertedAmount ? expense.convertedAmount : parseFloat(expense.amount))}
+                    </p>
+                  </div>
                 ))}
-              </tbody>
-            </table>
+              </div>
+            ) : (
+              <div className="mt-6 rounded-[1.5rem] bg-slate-100/70 px-5 py-12 text-center text-slate-500">
+                No recent expenses.
+              </div>
+            )}
+          </section>
+        </div>
+
+        <div className="space-y-6">
+          <div className="editorial-panel bg-[linear-gradient(180deg,rgba(243,244,245,0.92)_0%,rgba(255,255,255,0.92)_100%)]">
+            <p className="eyebrow">Upcoming Obligations</p>
+            <h3 className="mt-2 text-2xl font-semibold text-slate-900">Latest spending prompts</h3>
+
+            <div className="mt-6 space-y-3">
+              <div className="rounded-[1.4rem] bg-white px-4 py-4 shadow-[0_10px_30px_rgba(25,28,29,0.04)]">
+                <div className="flex items-start justify-between gap-4">
+                  <div>
+                    <p className="text-sm font-semibold text-slate-900 clamp-2">{latestExpenseLabel}</p>
+                    {displayRecentExpenses[0] && (
+                      <p className="mt-1 text-sm text-slate-500 clamp-1">{`${getCategoryName(displayRecentExpenses[0].categoryId)} • ${formatDate(displayRecentExpenses[0].date)}`}</p>
+                    )}
+                  </div>
+                  <p className="font-[family:var(--font-manrope)] text-lg font-semibold tracking-[-0.03em] text-slate-900">{formatAmount(latestExpenseAmount)}</p>
+                </div>
+              </div>
+
+              <div className="rounded-[1.4rem] bg-white px-4 py-4 shadow-[0_10px_30px_rgba(25,28,29,0.04)]">
+                <div className="flex items-start justify-between gap-4">
+                  <div>
+                    <p className="text-sm font-semibold text-slate-900 clamp-2">{secondExpenseLabel}</p>
+                    {displayRecentExpenses[1] && (
+                      <p className="mt-1 text-sm text-slate-500 clamp-1">{`${getCategoryName(displayRecentExpenses[1].categoryId)} • ${formatDate(displayRecentExpenses[1].date)}`}</p>
+                    )}
+                  </div>
+                  <p className="font-[family:var(--font-manrope)] text-lg font-semibold tracking-[-0.03em] text-slate-900">{formatAmount(secondExpenseAmount)}</p>
+                </div>
+              </div>
+            </div>
           </div>
-        ) : (
-          <div className="text-center py-8 bg-slate-50 rounded-xl">
-            <p className="text-slate-500">No recent expenses</p>
+
+          <div className="editorial-panel">
+            <div className="flex items-center justify-between gap-4">
+              <div>
+                <p className="eyebrow">Category Ranking</p>
+                <h3 className="mt-2 text-2xl font-semibold text-slate-900">Top spending categories</h3>
+              </div>
+              <span className="rounded-full bg-slate-100/80 px-3 py-1 text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">
+                {getCurrencyDisplay(currency)}
+              </span>
+            </div>
+
+            <div className="mt-6 h-[20rem]">
+              {categoryTotals.categories.length > 0 ? (
+                <Bar
+                  data={barChartData}
+                  options={{
+                    maintainAspectRatio: false,
+                    scales: {
+                      x: {
+                        grid: { display: false },
+                        ticks: { color: '#424654' },
+                        border: { display: false },
+                      },
+                      y: {
+                        beginAtZero: true,
+                        grid: { color: 'rgba(225, 227, 228, 0.7)' },
+                        ticks: { color: '#737785' },
+                        border: { display: false },
+                      },
+                    },
+                    plugins: {
+                      legend: { display: false },
+                      tooltip: {
+                        callbacks: {
+                          label(context) {
+                            return `${context.label}: ${formatAmount(context.raw as number)}`;
+                          },
+                        },
+                      },
+                    },
+                  }}
+                />
+              ) : (
+                <div className="flex h-full items-center justify-center rounded-[1.5rem] bg-slate-100/70 text-slate-500">
+                  No category data available.
+                </div>
+              )}
+            </div>
           </div>
-        )}
-      </div>
-      
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <Link href="/expenses/add" className="card border-t-4 border-t-sky-500 group">
-          <div>
-            <h3 className="font-semibold text-slate-900 mb-1 group-hover:text-sky-600 transition-colors">Add Expense</h3>
-            <p className="text-sm text-slate-500">Record a new transaction</p>
+
+          <div className="editorial-panel bg-[linear-gradient(180deg,rgba(243,244,245,0.92)_0%,rgba(255,255,255,0.92)_100%)]">
+            <p className="eyebrow">Quick Links</p>
+            <div className="mt-4 grid gap-3">
+              <Link href="/expenses" className="editorial-subpanel transition-transform hover:translate-y-[-1px]">
+                <p className="text-lg font-semibold text-slate-900">Review transactions</p>
+              </Link>
+              <Link href="/reports" className="editorial-subpanel transition-transform hover:translate-y-[-1px]">
+                <p className="text-lg font-semibold text-slate-900">Open reports</p>
+              </Link>
+            </div>
           </div>
-        </Link>
-        <Link href="/reports" className="card border-t-4 border-t-violet-500 group">
-          <div>
-            <h3 className="font-semibold text-slate-900 mb-1 group-hover:text-violet-600 transition-colors">View Reports</h3>
-            <p className="text-sm text-slate-500">Analyze your spending</p>
-          </div>
-        </Link>
-        <Link href="/expenses" className="card border-t-4 border-t-emerald-500 group">
-          <div>
-            <h3 className="font-semibold text-slate-900 mb-1 group-hover:text-emerald-600 transition-colors">Manage Expenses</h3>
-            <p className="text-sm text-slate-500">View and edit transactions</p>
-          </div>
-        </Link>
-      </div>
+        </div>
+      </section>
     </div>
   );
 }

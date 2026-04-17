@@ -68,7 +68,7 @@ export default function InvestmentAssetForm({ initialData, onSubmit, isEditing =
           id="symbol"
           type="text"
           className="form-input uppercase"
-          placeholder="AAPL"
+          placeholder="Symbol"
           {...register('symbol', { required: 'Symbol is required' })}
         />
         {errors.symbol && (
@@ -77,12 +77,12 @@ export default function InvestmentAssetForm({ initialData, onSubmit, isEditing =
       </div>
 
       <div>
-        <label htmlFor="name" className="form-label">Asset Name</label>
+        <label htmlFor="name" className="form-label">Name</label>
         <input
           id="name"
           type="text"
           className="form-input"
-          placeholder="Apple Inc"
+          placeholder="Name"
           {...register('name', { required: 'Asset name is required' })}
         />
         {errors.name && (
@@ -124,7 +124,7 @@ export default function InvestmentAssetForm({ initialData, onSubmit, isEditing =
           id="market"
           type="text"
           className="form-input"
-          placeholder="NASDAQ, HOSE, Binance"
+          placeholder="Market"
           {...register('market')}
         />
       </div>

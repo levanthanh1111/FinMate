@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { investmentAssetApi, investmentHoldingApi, investmentPortfolioApi, investmentReportApi, investmentTransactionApi } from '@/lib/api';
-import { formatCurrency } from '@/lib/currencyService';
+import { convertCurrency, formatCompactCurrency, formatCurrency } from '@/lib/currencyService';
 import { useCurrency } from '@/lib/CurrencyContext';
 
 export default function InvestmentsPage() {
@@ -15,6 +15,14 @@ export default function InvestmentsPage() {
   const [portfolios, setPortfolios] = useState<any[]>([]);
   const [assets, setAssets] = useState<any[]>([]);
   const [overviewReport, setOverviewReport] = useState<any | null>(null);
+  const [convertedSummary, setConvertedSummary] = useState({
+    totalMarketValue: 0,
+    totalCost: 0,
+    totalUnrealizedGainLoss: 0,
+    realizedProfitLossInPeriod: 0,
+  });
+  const [convertedHoldingValues, setConvertedHoldingValues] = useState<Record<string, { unrealizedGainLoss: number; marketValue: number }>>({});
+  const [convertedTransactionTotals, setConvertedTransactionTotals] = useState<Record<number, number>>({});
 
   useEffect(() => {
     const fetchData = async () => {
@@ -29,7 +37,7 @@ export default function InvestmentsPage() {
           investmentTransactionApi.getAllTransactions(),
           investmentPortfolioApi.getAllPortfolios(),
           investmentAssetApi.getAllAssets(),
-          investmentReportApi.getOverview({ startDate: monthStart, endDate: monthEnd })
+          investmentReportApi.getOverview({ startDate: monthStart, endDate: monthEnd }),
         ]);
 
         setSummary(summaryData);
@@ -56,151 +64,219 @@ export default function InvestmentsPage() {
 
   const portfolioById = useMemo(() => Object.fromEntries(portfolios.map((item: any) => [item.id, item])), [portfolios]);
   const assetById = useMemo(() => Object.fromEntries(assets.map((item: any) => [item.id, item])), [assets]);
+  const latestTransaction = recentTransactions[0];
+
+  useEffect(() => {
+    const convertInvestmentValues = async () => {
+      const nextSummary = {
+        totalMarketValue: await convertCurrency(parseFloat(summary?.totalMarketValue || 0), 'VND', currency),
+        totalCost: await convertCurrency(parseFloat(summary?.totalCost || 0), 'VND', currency),
+        totalUnrealizedGainLoss: await convertCurrency(parseFloat(summary?.totalUnrealizedGainLoss || 0), 'VND', currency),
+        realizedProfitLossInPeriod: await convertCurrency(parseFloat(overviewReport?.realizedProfitLossInPeriod || 0), 'VND', currency),
+      };
+
+      const holdingEntries = await Promise.all(
+        holdings.map(async (holding: any) => {
+          const key = `${holding.portfolioId}-${holding.assetId}`;
+          return [
+            key,
+            {
+              unrealizedGainLoss: await convertCurrency(parseFloat(holding.unrealizedGainLoss || 0), 'VND', currency),
+              marketValue: await convertCurrency(parseFloat(holding.marketValue || 0), 'VND', currency),
+            },
+          ] as const;
+        }),
+      );
+
+      const transactionEntries = await Promise.all(
+        recentTransactions.map(async (transaction: any) => {
+          const total = (parseFloat(transaction.quantity) || 0) * (parseFloat(transaction.unitPrice) || 0);
+          const converted = await convertCurrency(total, transaction.currency || 'VND', currency);
+          return [transaction.id, converted] as const;
+        }),
+      );
+
+      setConvertedSummary(nextSummary);
+      setConvertedHoldingValues(Object.fromEntries(holdingEntries));
+      setConvertedTransactionTotals(Object.fromEntries(transactionEntries));
+    };
+
+    convertInvestmentValues();
+  }, [currency, summary, overviewReport, holdings, recentTransactions]);
 
   return (
-    <div className="space-y-6 max-w-6xl mx-auto">
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-        <div>
-          <h1 className="text-2xl md:text-3xl font-bold text-slate-900 tracking-tight">Investments</h1>
-          <p className="text-slate-500 mt-1">Manage portfolios, assets, and transactions</p>
+    <div className="mx-auto max-w-[1400px] space-y-6">
+      <section className="grid gap-6 xl:grid-cols-[1.2fr_0.8fr]">
+        <div className="editorial-panel">
+          <div className="mb-6 flex items-center justify-between gap-4">
+            <div>
+              <p className="eyebrow">Investments</p>
+              <h2 className="mt-2 text-3xl font-semibold text-slate-900">Investments</h2>
+            </div>
+            <Link href="/investments/transactions/add" className="btn btn-primary">New Trade</Link>
+          </div>
+
+          <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+            <div className="rounded-[1.75rem] bg-[linear-gradient(145deg,rgba(0,64,161,0.98)_0%,rgba(0,86,210,0.96)_100%)] p-6 text-white shadow-[0_22px_50px_rgba(0,86,210,0.24)] xl:col-span-2">
+              <p className="eyebrow !text-blue-100">Investment Net Worth</p>
+              <p className="mt-4 whitespace-nowrap font-[family:var(--font-manrope)] text-4xl font-semibold tracking-[-0.06em] tabular-nums md:text-5xl xl:text-6xl">
+                {formatCompactCurrency(convertedSummary.totalMarketValue, currency)}
+              </p>
+              <div className="mt-6 grid gap-4 md:grid-cols-2">
+                <div>
+                  <p className="text-xs uppercase tracking-[0.22em] text-blue-100/80">Total Cost</p>
+                  <p className="mt-2 whitespace-nowrap text-lg font-semibold tabular-nums">{formatCompactCurrency(convertedSummary.totalCost, currency)}</p>
+                </div>
+                <div>
+                  <p className="text-xs uppercase tracking-[0.22em] text-blue-100/80">This Month Realized P/L</p>
+                  <p className="mt-2 whitespace-nowrap text-lg font-semibold tabular-nums">{formatCompactCurrency(convertedSummary.realizedProfitLossInPeriod, currency)}</p>
+                </div>
+              </div>
+            </div>
+
+            <div className="editorial-subpanel">
+              <p className="eyebrow">Open Holdings</p>
+              <p className="mt-4 font-[family:var(--font-manrope)] text-4xl font-semibold tracking-[-0.05em] text-slate-900">
+                {summary?.holdingsCount ?? 0}
+              </p>
+            </div>
+
+            <div className="editorial-subpanel">
+              <p className="eyebrow">Unrealized Gain/Loss</p>
+              <p className={`mt-4 whitespace-nowrap font-[family:var(--font-manrope)] text-2xl font-semibold tracking-[-0.05em] tabular-nums lg:text-3xl ${convertedSummary.totalUnrealizedGainLoss >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>
+                {formatCompactCurrency(convertedSummary.totalUnrealizedGainLoss, currency)}
+              </p>
+            </div>
+
+            <div className="editorial-subpanel">
+              <p className="eyebrow">Portfolios</p>
+              <p className="mt-4 font-[family:var(--font-manrope)] text-4xl font-semibold tracking-[-0.05em] text-slate-900">
+                {portfolios.length}
+              </p>
+            </div>
+          </div>
         </div>
 
-        <div className="flex flex-wrap gap-2">
-          <Link href="/investments/portfolios" className="btn btn-secondary">Portfolios</Link>
-          <Link href="/investments/assets" className="btn btn-secondary">Assets</Link>
-          <Link href="/investments/prices" className="btn btn-secondary">Latest Prices</Link>
-          <Link href="/investments/reports" className="btn btn-secondary">Reports</Link>
-          <Link href="/investments/transactions" className="btn btn-primary">Transactions</Link>
-        </div>
-      </div>
+        <div className="space-y-6">
+          <div className="editorial-panel bg-[linear-gradient(180deg,rgba(243,244,245,0.92)_0%,rgba(255,255,255,0.92)_100%)]">
+            <p className="eyebrow">Quick Links</p>
+            <div className="mt-4 grid gap-3">
+              <Link href="/investments/portfolios" className="editorial-subpanel transition-transform hover:translate-y-[-1px]">
+                <p className="text-lg font-semibold text-slate-900">Portfolios</p>
+              </Link>
+              <Link href="/investments/assets" className="editorial-subpanel transition-transform hover:translate-y-[-1px]">
+                <p className="text-lg font-semibold text-slate-900">Assets</p>
+              </Link>
+              <Link href="/investments/prices" className="editorial-subpanel transition-transform hover:translate-y-[-1px]">
+                <p className="text-lg font-semibold text-slate-900">Latest Prices</p>
+              </Link>
+              <Link href="/investments/reports" className="editorial-subpanel transition-transform hover:translate-y-[-1px]">
+                <p className="text-lg font-semibold text-slate-900">Reports</p>
+              </Link>
+            </div>
+          </div>
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-5 gap-4">
-        <div className="card-static">
-          <p className="text-sm text-slate-500">Total Cost</p>
-          <p className="text-2xl font-bold text-slate-900 mt-1">
-            {formatCurrency(parseFloat(summary?.totalCost || 0), currency)}
-          </p>
+          <div className="editorial-panel">
+            <p className="eyebrow">Latest Trade</p>
+            {latestTransaction ? (
+              <div className="mt-3 space-y-2">
+                <p className="text-xl font-semibold text-slate-900">{assetById[latestTransaction.assetId]?.symbol || `Asset ${latestTransaction.assetId}`}</p>
+                <p className="text-sm text-slate-500">
+                  {portfolioById[latestTransaction.portfolioId]?.name || `Portfolio ${latestTransaction.portfolioId}`} • {latestTransaction.type} • {new Date(latestTransaction.transactionDate).toLocaleDateString()}
+                </p>
+                <p className="font-[family:var(--font-manrope)] text-2xl font-semibold tracking-[-0.04em] text-slate-900">
+                  {formatCurrency(convertedTransactionTotals[latestTransaction.id] ?? 0, currency)}
+                </p>
+              </div>
+            ) : (
+              <p className="mt-3 text-sm text-slate-500">No recent trade activity yet.</p>
+            )}
+          </div>
         </div>
-        <div className="card-static">
-          <p className="text-sm text-slate-500">Market Value</p>
-          <p className="text-2xl font-bold text-slate-900 mt-1">
-            {formatCurrency(parseFloat(summary?.totalMarketValue || 0), currency)}
-          </p>
-        </div>
-        <div className="card-static">
-          <p className="text-sm text-slate-500">Unrealized Gain/Loss</p>
-          <p className={`text-2xl font-bold mt-1 ${parseFloat(summary?.totalUnrealizedGainLoss || 0) >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>
-            {formatCurrency(parseFloat(summary?.totalUnrealizedGainLoss || 0), currency)}
-          </p>
-        </div>
-        <div className="card-static">
-          <p className="text-sm text-slate-500">Open Holdings</p>
-          <p className="text-2xl font-bold text-slate-900 mt-1">{summary?.holdingsCount ?? 0}</p>
-        </div>
-        <div className="card-static">
-          <p className="text-sm text-slate-500">Realized P/L (This Month)</p>
-          <p className={`text-2xl font-bold mt-1 ${parseFloat(overviewReport?.realizedProfitLossInPeriod || 0) >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>
-            {formatCurrency(parseFloat(overviewReport?.realizedProfitLossInPeriod || 0), currency)}
-          </p>
-        </div>
-      </div>
+      </section>
 
-      <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
-        <div className="card-static">
-          <div className="flex items-center justify-between mb-4">
-            <h2 className="text-lg font-semibold text-slate-900">Current Holdings</h2>
-            <Link href="/investments/transactions" className="link text-sm">Manage</Link>
+      <section className="grid gap-6 xl:grid-cols-2">
+        <div className="editorial-panel">
+          <div className="flex items-center justify-between gap-4">
+            <div>
+              <p className="eyebrow">Current Holdings</p>
+              <h2 className="mt-2 text-3xl font-semibold text-slate-900">Positions snapshot</h2>
+            </div>
+            <Link href="/investments/transactions" className="btn btn-secondary">
+              Manage
+            </Link>
           </div>
 
           {loading ? (
-            <div className="space-y-3">
-              {[1, 2, 3, 4].map((item) => <div key={item} className="skeleton h-10 w-full" />)}
+            <div className="mt-6 space-y-3">
+              {[1, 2, 3, 4].map((item) => <div key={item} className="skeleton h-16 rounded-[1.5rem]" />)}
             </div>
           ) : holdings.length === 0 ? (
-            <p className="text-sm text-slate-500">No holdings yet. Add a buy transaction to start tracking.</p>
+            <div className="mt-6 rounded-[1.5rem] bg-slate-100/70 px-5 py-12 text-center text-slate-500">
+              No holdings yet. Add a buy transaction to start tracking.
+            </div>
           ) : (
-            <div className="table-container">
-              <table className="table-default">
-                <thead className="table-header">
-                  <tr>
-                    <th className="table-header-cell">Asset</th>
-                    <th className="table-header-cell text-right">Quantity</th>
-                    <th className="table-header-cell text-right">Average Cost</th>
-                    <th className="table-header-cell text-right">Unrealized P/L</th>
-                    <th className="table-header-cell text-right">Market Value</th>
-                  </tr>
-                </thead>
-                <tbody className="table-body">
-                  {holdings.slice(0, 10).map((holding: any) => {
-                    const asset = assetById[holding.assetId];
-                    const symbol = asset?.symbol || `Asset ${holding.assetId}`;
-                    return (
-                      <tr key={`${holding.portfolioId}-${holding.assetId}`} className="table-row">
-                        <td className="table-cell">
-                          <div className="font-medium text-slate-800">{symbol}</div>
-                          <div className="text-xs text-slate-500">{portfolioById[holding.portfolioId]?.name || `Portfolio ${holding.portfolioId}`}</div>
-                        </td>
-                        <td className="table-cell text-right tabular-nums">{Number(holding.quantityHeld || 0).toLocaleString()}</td>
-                        <td className="table-cell text-right font-medium tabular-nums">{formatCurrency(parseFloat(holding.averageCost || 0), currency)}</td>
-                        <td className={`table-cell text-right font-medium tabular-nums ${parseFloat(holding.unrealizedGainLoss || 0) >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>
-                          {formatCurrency(parseFloat(holding.unrealizedGainLoss || 0), currency)}
-                        </td>
-                        <td className="table-cell text-right font-medium tabular-nums">{formatCurrency(parseFloat(holding.marketValue || 0), currency)}</td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
+            <div className="mt-6 overflow-hidden rounded-[1.5rem] bg-white">
+              {holdings.slice(0, 8).map((holding: any) => {
+                const asset = assetById[holding.assetId];
+                const symbol = asset?.symbol || `Asset ${holding.assetId}`;
+                return (
+                  <div key={`${holding.portfolioId}-${holding.assetId}`} className="grid gap-3 border-b border-slate-100/80 px-5 py-4 last:border-b-0 md:grid-cols-[0.95fr_0.8fr_0.9fr_0.9fr] md:items-center">
+                    <div>
+                      <p className="font-medium text-slate-900">{symbol}</p>
+                      <p className="mt-1 text-sm text-slate-500">{portfolioById[holding.portfolioId]?.name || `Portfolio ${holding.portfolioId}`}</p>
+                    </div>
+                    <p className="text-sm text-slate-600 md:text-right">{Number(holding.quantityHeld || 0).toLocaleString()}</p>
+                    <p className={`font-medium md:text-right ${parseFloat(holding.unrealizedGainLoss || 0) >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>
+                      {formatCurrency(convertedHoldingValues[`${holding.portfolioId}-${holding.assetId}`]?.unrealizedGainLoss ?? 0, currency)}
+                    </p>
+                    <p className="font-[family:var(--font-manrope)] font-semibold text-slate-900 md:text-right">
+                      {formatCurrency(convertedHoldingValues[`${holding.portfolioId}-${holding.assetId}`]?.marketValue ?? 0, currency)}
+                    </p>
+                  </div>
+                );
+              })}
             </div>
           )}
         </div>
 
-        <div className="card-static">
-          <div className="flex items-center justify-between mb-4">
-            <h2 className="text-lg font-semibold text-slate-900">Recent Transactions</h2>
-            <Link href="/investments/transactions/add" className="link text-sm">Add transaction</Link>
+        <div className="editorial-panel">
+          <div className="flex items-center justify-between gap-4">
+            <div>
+              <p className="eyebrow">Recent Transactions</p>
+              <h2 className="mt-2 text-3xl font-semibold text-slate-900">Latest trade activity</h2>
+            </div>
+            <Link href="/investments/transactions/add" className="btn btn-secondary">
+              Add transaction
+            </Link>
           </div>
 
           {loading ? (
-            <div className="space-y-3">
-              {[1, 2, 3, 4].map((item) => <div key={item} className="skeleton h-10 w-full" />)}
+            <div className="mt-6 space-y-3">
+              {[1, 2, 3, 4].map((item) => <div key={item} className="skeleton h-16 rounded-[1.5rem]" />)}
             </div>
           ) : recentTransactions.length === 0 ? (
-            <p className="text-sm text-slate-500">No transactions yet.</p>
+            <div className="mt-6 rounded-[1.5rem] bg-slate-100/70 px-5 py-12 text-center text-slate-500">
+              No transactions yet.
+            </div>
           ) : (
-            <div className="table-container">
-              <table className="table-default">
-                <thead className="table-header">
-                  <tr>
-                    <th className="table-header-cell">Date</th>
-                    <th className="table-header-cell">Asset</th>
-                    <th className="table-header-cell">Type</th>
-                    <th className="table-header-cell text-right">Amount</th>
-                  </tr>
-                </thead>
-                <tbody className="table-body">
-                  {recentTransactions.map((transaction: any) => {
-                    const asset = assetById[transaction.assetId];
-                    const amount = (parseFloat(transaction.quantity) || 0) * (parseFloat(transaction.unitPrice) || 0);
-                    return (
-                      <tr key={transaction.id} className="table-row">
-                        <td className="table-cell">{new Date(transaction.transactionDate).toLocaleDateString()}</td>
-                        <td className="table-cell font-medium text-slate-800">{asset?.symbol || `Asset ${transaction.assetId}`}</td>
-                        <td className="table-cell">
-                          <span className={`inline-flex px-2 py-1 rounded-md text-xs font-semibold ${transaction.type === 'BUY' ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'}`}>
-                            {transaction.type}
-                          </span>
-                        </td>
-                        <td className="table-cell text-right tabular-nums">{formatCurrency(amount, currency)}</td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
+            <div className="mt-6 overflow-hidden rounded-[1.5rem] bg-white">
+              {recentTransactions.map((transaction: any) => {
+                const asset = assetById[transaction.assetId];
+                const amount = (parseFloat(transaction.quantity) || 0) * (parseFloat(transaction.unitPrice) || 0);
+                return (
+                  <div key={transaction.id} className="grid gap-3 border-b border-slate-100/80 px-5 py-4 last:border-b-0 md:grid-cols-[0.8fr_1fr_0.7fr_0.8fr] md:items-center">
+                    <p className="text-sm text-slate-500">{new Date(transaction.transactionDate).toLocaleDateString()}</p>
+                    <p className="font-medium text-slate-900">{asset?.symbol || `Asset ${transaction.assetId}`}</p>
+                    <p className={`text-sm font-semibold ${transaction.type === 'BUY' ? 'text-emerald-700' : 'text-amber-700'}`}>{transaction.type}</p>
+                    <p className="font-[family:var(--font-manrope)] font-semibold text-slate-900 md:text-right">{formatCurrency(convertedTransactionTotals[transaction.id] ?? 0, currency)}</p>
+                  </div>
+                );
+              })}
             </div>
           )}
         </div>
-      </div>
+      </section>
     </div>
   );
 }

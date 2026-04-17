@@ -17,9 +17,10 @@ type ExpenseFormProps = {
   initialData?: any;
   onSubmit: (data: any) => void;
   isEditing?: boolean;
+  isSubmitting?: boolean;
 };
 
-export default function ExpenseForm({ initialData, onSubmit, isEditing = false }: ExpenseFormProps) {
+export default function ExpenseForm({ initialData, onSubmit, isEditing = false, isSubmitting = false }: ExpenseFormProps) {
   const { currency } = useCurrency();
   const { register, handleSubmit, formState: { errors }, reset, setValue, setError, clearErrors } = useForm();
   const [categories, setCategories] = useState<{ id: number; name: string }[]>([]);
@@ -136,7 +137,7 @@ export default function ExpenseForm({ initialData, onSubmit, isEditing = false }
   
   return (
     <form onSubmit={handleSubmit(handleFormSubmit)} className="space-y-4">
-      <div>
+      <div className="rounded-[1.5rem] bg-slate-100/70 p-5 md:p-6">
         <label htmlFor="amount" className="form-label">Amount ({CURRENCY_SYMBOLS[currency]} {currency})</label>
         <input
           id="amount"
@@ -156,13 +157,12 @@ export default function ExpenseForm({ initialData, onSubmit, isEditing = false }
             }
           }}
         />
-        <p className="text-xs text-slate-500 mt-1">Entered in {getCurrencyDisplay(currency)}</p>
         {errors.amount && (
           <p className="text-red-500 text-sm mt-1">{errors.amount.message as string}</p>
         )}
       </div>
       
-      <div>
+      <div className="rounded-[1.5rem] bg-slate-100/70 p-5 md:p-6">
         <label htmlFor="categoryId" className="form-label">Category</label>
         <select
           id="categoryId"
@@ -183,7 +183,7 @@ export default function ExpenseForm({ initialData, onSubmit, isEditing = false }
         )}
       </div>
       
-      <div>
+      <div className="rounded-[1.5rem] bg-slate-100/70 p-5 md:p-6">
         <label htmlFor="date" className="form-label">Date & Time</label>
         <input
           id="date"
@@ -198,21 +198,23 @@ export default function ExpenseForm({ initialData, onSubmit, isEditing = false }
         )}
       </div>
       
-      <div>
+      <div className="rounded-[1.5rem] bg-slate-100/70 p-5 md:p-6">
         <label htmlFor="note" className="form-label">Note (Optional)</label>
         <textarea
           id="note"
-          className="form-input"
-          rows={3}
-          placeholder="Add a note about this expense"
+          className="form-input min-h-32 resize-y"
+          rows={4}
+          placeholder="Note"
           {...register('note')}
         />
       </div>
       
-      <div className="pt-2">
-        <button type="submit" className="btn btn-primary w-full">
-          {isEditing ? 'Update Expense' : 'Add Expense'}
-        </button>
+      <div className="rounded-[1.5rem] bg-[linear-gradient(180deg,rgba(243,244,245,0.9)_0%,rgba(255,255,255,0.9)_100%)] p-5 md:p-6">
+        <div className="flex justify-end">
+          <button type="submit" className="btn btn-primary w-full md:w-auto" disabled={isSubmitting}>
+            {isSubmitting ? (isEditing ? 'Updating...' : 'Creating...') : (isEditing ? 'Update Expense' : 'Add Expense')}
+          </button>
+        </div>
       </div>
     </form>
   );

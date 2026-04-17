@@ -46,12 +46,12 @@ export default function InvestmentPortfolioForm({ initialData, onSubmit, isEditi
   return (
     <form onSubmit={handleSubmit((values) => onSubmit({ ...values, baseCurrency: values.baseCurrency.toUpperCase() }))} className="space-y-4">
       <div>
-        <label htmlFor="name" className="form-label">Portfolio Name</label>
+        <label htmlFor="name" className="form-label">Name</label>
         <input
           id="name"
           type="text"
           className="form-input"
-          placeholder="Main Portfolio"
+          placeholder="Name"
           {...register('name', { required: 'Portfolio name is required' })}
         />
         {errors.name && (
@@ -65,7 +65,7 @@ export default function InvestmentPortfolioForm({ initialData, onSubmit, isEditi
           id="institution"
           type="text"
           className="form-input"
-          placeholder="Broker or bank"
+          placeholder="Institution"
           {...register('institution')}
         />
       </div>
@@ -92,7 +92,7 @@ export default function InvestmentPortfolioForm({ initialData, onSubmit, isEditi
           id="description"
           rows={3}
           className="form-input"
-          placeholder="Any notes about this portfolio"
+          placeholder="Description"
           {...register('description')}
         />
       </div>

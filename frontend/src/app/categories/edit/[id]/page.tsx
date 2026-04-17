@@ -16,7 +16,7 @@ export default function EditCategoryPage({ params }: { params: { id: string } })
   useEffect(() => {
     const fetchCategory = async () => {
       try {
-        const data = await categoryApi.getCategoryById(parseInt(params.id));
+        const data = await categoryApi.getCategoryById(parseInt(params.id, 10));
         setCategory(data);
       } catch (error) {
         console.error('Error fetching category:', error);
@@ -32,7 +32,7 @@ export default function EditCategoryPage({ params }: { params: { id: string } })
   const handleSubmit = async (data: { name: string; description?: string }) => {
     try {
       setIsSubmitting(true);
-      await categoryApi.updateCategory(parseInt(params.id), data);
+      await categoryApi.updateCategory(parseInt(params.id, 10), data);
       setMessage({ text: 'Category updated successfully!', type: 'success' });
       setTimeout(() => {
         router.push('/categories');
@@ -46,38 +46,41 @@ export default function EditCategoryPage({ params }: { params: { id: string } })
   };
 
   return (
-    <div className="max-w-2xl mx-auto">
-      <Link href="/categories" className="inline-flex items-center gap-1 text-sm text-slate-600 hover:text-sky-600 font-medium mb-6">
-        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+    <div className="mx-auto max-w-5xl space-y-6">
+      <Link href="/categories" className="inline-flex items-center gap-2 rounded-full bg-white/80 px-4 py-2 text-sm font-medium text-slate-600 transition-colors hover:text-slate-900">
+        <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
         </svg>
         Back to Categories
       </Link>
 
-      <h1 className="text-2xl md:text-3xl font-bold text-slate-900 tracking-tight mb-2">Edit Category</h1>
-      <p className="text-slate-500 mb-6">Update category details</p>
+      <section className="editorial-panel">
+        <p className="eyebrow">Edit Category</p>
+        <h1 className="mt-2 text-4xl font-semibold tracking-[-0.05em] text-slate-900 md:text-5xl">{loading ? 'Category' : category?.name || 'Category'}</h1>
+      </section>
 
       {message.text && (
-        <div className={`p-4 mb-6 rounded-xl ${message.type === 'success' ? 'bg-emerald-50 text-emerald-800 border border-emerald-200' : 'bg-red-50 text-red-800 border border-red-200'}`}>
+        <div className={`rounded-[1.5rem] px-5 py-4 text-sm ${message.type === 'success' ? 'bg-emerald-50 text-emerald-800' : 'bg-red-50 text-red-800'}`}>
           {message.text}
         </div>
       )}
 
-      <div className="card-static">
+      <section className="editorial-panel">
         {loading ? (
-          <div className="space-y-4 py-8">
-            <div className="skeleton h-10 w-full" />
-            <div className="skeleton h-24 w-full" />
+          <div className="space-y-4 py-4">
+            <div className="skeleton h-32 rounded-[1.5rem]" />
+            <div className="skeleton h-40 rounded-[1.5rem]" />
+            <div className="skeleton h-28 rounded-[1.5rem]" />
           </div>
         ) : category ? (
-          <CategoryForm initialData={category} onSubmit={handleSubmit} isEditing={true} />
+          <CategoryForm initialData={category} onSubmit={handleSubmit} isEditing={true} isSubmitting={isSubmitting} />
         ) : (
-          <div className="text-center py-12">
-            <p className="text-slate-600 mb-2">Category not found</p>
-            <Link href="/categories" className="link">Return to categories</Link>
+          <div className="rounded-[1.5rem] bg-slate-100/70 px-5 py-16 text-center">
+            <p className="text-slate-900">Category not found</p>
+            <Link href="/categories" className="link mt-3 inline-flex">Return to categories</Link>
           </div>
         )}
-      </div>
+      </section>
     </div>
   );
 }
